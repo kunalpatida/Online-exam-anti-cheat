@@ -61,3 +61,7 @@ CREATE TABLE cheat_logs (
     FOREIGN KEY (student_id) REFERENCES users(user_id),
     FOREIGN KEY (exam_id) REFERENCES exams(exam_id)
 );
+           
+
+
+

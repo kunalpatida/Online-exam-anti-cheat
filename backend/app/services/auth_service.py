@@ -38,3 +38,21 @@ def login_user(email, password):
         return True, user
     else:
         return False, "Invalid password"
+
+
+def get_user_role(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT role FROM users WHERE user_id = %s",
+        (user_id,)
+    )
+    user = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if user:
+        return user["role"]
+    return None
