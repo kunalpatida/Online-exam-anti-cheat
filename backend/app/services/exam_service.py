@@ -184,3 +184,110 @@ def log_cheat_event(student_id, exam_id, event_type):
     conn.commit()
     cursor.close()
     conn.close()
+
+
+
+def get_exam_results(exam_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT u.name, u.email, r.score, r.total_marks
+        FROM results r
+        JOIN users u ON r.user_id = u.user_id
+        WHERE r.exam_id = %s
+    """, (exam_id,))
+
+    data = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return data
+
+
+def get_exam_cheat_logs(exam_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT u.name, c.event_type, c.event_time
+        FROM cheat_logs c
+        JOIN users u ON c.user_id = u.user_id
+        WHERE c.exam_id = %s
+    """, (exam_id,))
+
+    logs = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return logs
+
+
+def log_cheat_event(user_id, exam_id, event_type):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO cheat_logs (user_id, exam_id, event_type)
+        VALUES (%s, %s, %s)
+    """, (user_id, exam_id, event_type))
+
+    cursor.execute("""
+        SELECT COUNT(*) FROM cheat_logs
+        WHERE user_id=%s AND exam_id=%s
+    """, (user_id, exam_id))
+
+    count = cursor.fetchone()[0]
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return count
+
+
+
+
+
+from datetime import datetime, timedelta
+
+def start_exam_if_not_started(user_id, exam_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT start_time FROM results
+        WHERE user_id=%s AND exam_id=%s
+    """, (user_id, exam_id))
+
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("""
+            INSERT INTO results (user_id, exam_id, start_time)
+            VALUES (%s, %s, NOW())
+        """, (user_id, exam_id))
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+
+
+def is_exam_time_over(user_id, exam_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT r.start_time, e.duration_minutes
+        FROM results r
+        JOIN exams e ON r.exam_id = e.exam_id
+        WHERE r.user_id=%s AND r.exam_id=%s
+    """, (user_id, exam_id))
+
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not row or not row["start_time"]:
+        return False
+
+    end_time = row["start_time"] + timedelta(minutes=row["duration_minutes"])
+    return datetime.now() > end_time
