@@ -2,6 +2,8 @@ from flask import Flask
 from flask_jwt_extended import JWTManager 
 from backend.app.routes.auth_routes import auth_bp
 from backend.app.routes.exam_routes import exam_bp
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 
