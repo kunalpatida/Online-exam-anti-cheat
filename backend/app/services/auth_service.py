@@ -1,24 +1,28 @@
 from backend.database import get_db_connection
 from backend.app.utils.password_utils import hash_password, verify_password
+from werkzeug.security import generate_password_hash
 
-def register_user(name, email, password, role="student"):
+
+def register_user(name, email, password, organization):
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    hashed_password = hash_password(password)
+    hashed_password = generate_password_hash(password)
 
-    query = """
-        INSERT INTO users (name, email, password_hash, role)
+    cursor.execute("""
+        INSERT INTO users (name, email, password, organization)
         VALUES (%s, %s, %s, %s)
-    """
+    """, (name, email, hashed_password, organization))
 
-    cursor.execute(query, (name, email, hashed_password, role))
     conn.commit()
 
     cursor.close()
     conn.close()
 
     return True
+
+from werkzeug.security import check_password_hash
 
 def login_user(email, password):
     conn = get_db_connection()
@@ -34,10 +38,11 @@ def login_user(email, password):
     if not user:
         return False, "User not found"
 
-    if verify_password(password, user["password_hash"]):
-        return True, user
-    else:
+    # verify hashed password
+    if not check_password_hash(user["password"], password):
         return False, "Invalid password"
+
+    return True, user
 
 
 def get_user_role(user_id):

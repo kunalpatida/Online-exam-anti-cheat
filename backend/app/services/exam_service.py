@@ -1,22 +1,39 @@
 from backend.database import get_db_connection
 
-def create_exam(title, duration_minutes, total_marks, admin_id):
+import random
+import string
+
+def generate_exam_code(length=6):
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+
+def create_exam(title, duration_minutes, total_marks, admin_id, start_time=None, end_time=None):
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    query = """
-        INSERT INTO exams (title, duration_minutes, total_marks, created_by)
-        VALUES (%s, %s, %s, %s)
-    """
+    exam_code = generate_exam_code()
 
-    cursor.execute(query, (title, duration_minutes, total_marks, admin_id))
+    cursor.execute("""
+        INSERT INTO exams
+        (title, duration_minutes, total_marks, created_by, exam_code, start_time, end_time)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (
+        title,
+        duration_minutes,
+        total_marks,
+        admin_id,
+        exam_code,
+        start_time,
+        end_time
+    ))
+
     conn.commit()
 
     cursor.close()
     conn.close()
 
-    return True
-
+    return exam_code
 
 def add_question(exam_id, question_text, option_a=None, option_b=None,
                  option_c=None, option_d=None,
@@ -44,11 +61,24 @@ def add_question(exam_id, question_text, option_a=None, option_b=None,
     cursor.close()
     conn.close()
 
-def get_all_exams():
+def get_all_exams(user_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT exam_id, title, duration_minutes, total_marks FROM exams")
+    cursor.execute("""
+    SELECT 
+        e.exam_id,
+        e.title,
+        e.duration_minutes,
+        e.total_marks,
+        e.exam_code,
+        COUNT(r.result_id) AS attempts
+    FROM exams e
+    LEFT JOIN results r ON e.exam_id = r.exam_id
+    WHERE e.created_by = %s
+    GROUP BY e.exam_id
+    ORDER BY e.exam_id DESC
+    """, (user_id,))
     exams = cursor.fetchall()
 
     cursor.close()
@@ -64,7 +94,7 @@ def get_questions_by_exam(exam_id):
     cursor.execute(
         """
         SELECT question_id, question_text,
-               option_a, option_b, option_c, option_d
+               option_a, option_b, option_c, option_d,question_type
         FROM questions
         WHERE exam_id = %s
         """,
@@ -139,16 +169,19 @@ def save_answer(user_id, exam_id, question_id,
 
 
 def submit_exam(user_id, exam_id):
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # fetch total marks
-    cursor.execute(
-        "SELECT total_marks FROM exams WHERE exam_id=%s",
-        (exam_id,)
-    )
-    exam = cursor.fetchone()
-    total_marks = exam["total_marks"]
+    # total marks
+    cursor.execute("SELECT total_marks FROM exams WHERE exam_id=%s", (exam_id,))
+    total_marks = cursor.fetchone()["total_marks"]
+
+    # total questions
+    cursor.execute("SELECT COUNT(*) as total_q FROM questions WHERE exam_id=%s", (exam_id,))
+    total_q = cursor.fetchone()["total_q"]
+
+    marks_per_q = total_marks / total_q if total_q else 0
 
     # fetch questions + answers
     cursor.execute("""
@@ -156,13 +189,12 @@ def submit_exam(user_id, exam_id):
             q.question_id,
             q.correct_option,
             q.question_type,
-            a.selected_option,
-            a.text_answer
+            a.selected_option
         FROM questions q
         LEFT JOIN answers a
-            ON q.question_id = a.question_id
-            AND a.user_id = %s
-            AND a.exam_id = %s
+        ON q.question_id = a.question_id
+        AND a.user_id = %s
+        AND a.exam_id = %s
         WHERE q.exam_id = %s
     """, (user_id, exam_id, exam_id))
 
@@ -172,45 +204,39 @@ def submit_exam(user_id, exam_id):
     has_descriptive = False
 
     for q in questions:
-        # MCQ auto grading
-        if q["question_type"] == "MCQ":
+
+        q_type = (q["question_type"] or "").lower()
+
+        # MCQ ONLY
+        if q_type == "mcq":
+
             if q["selected_option"] == q["correct_option"]:
-                score += 1
+                score += marks_per_q
+
+        # descriptive NOT evaluated here
         else:
-            # Descriptive question present
             has_descriptive = True
 
-    # decide evaluation status
+    status = "SUBMITTED"
     evaluation_status = "PENDING" if has_descriptive else "AUTO"
 
-    # save/update result
-    status = "SUBMITTED"
-    
-
     cursor.execute("""
-    INSERT INTO results 
-    (user_id, exam_id, score, total_marks, evaluation_status, status)
-    VALUES (%s, %s, %s, %s, %s, %s)
-    ON DUPLICATE KEY UPDATE 
+        INSERT INTO results 
+        (user_id, exam_id, score, total_marks, evaluation_status, status)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE 
         score=VALUES(score),
         evaluation_status=VALUES(evaluation_status),
         status=VALUES(status)
-    """, (
-    user_id,
-    exam_id,
-    score,
-    total_marks,
-    evaluation_status,
-    status
-    ))
+    """, (user_id, exam_id, round(score, 2), total_marks, evaluation_status, status))
 
     conn.commit()
     cursor.close()
     conn.close()
 
-    return score, total_marks
+    return round(score, 2), total_marks
 
-def log_cheat_event(student_id, exam_id, event_type):
+def log_cheat_event(user_id, exam_id, event_type):
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -219,30 +245,64 @@ def log_cheat_event(student_id, exam_id, event_type):
         INSERT INTO cheat_logs (student_id, exam_id, event_type)
         VALUES (%s, %s, %s)
         """,
-        (student_id, exam_id, event_type)
+        (user_id, exam_id, event_type)
     )
 
     conn.commit()
+   
+    #count logs
+    cursor.execute("""
+            SELECT COUNT(*)
+            FROM cheat_logs
+            WHERE student_id = %s AND exam_id = %s
+        """,(user_id, exam_id))
+    
+    count = cursor.fetchone()[0]
+
     cursor.close()
-    conn.close()
+    conn.close
+
+    return count
+
 
 
 
 def get_exam_results(exam_id):
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT u.name, u.email, r.score, r.total_marks
+        SELECT 
+            u.name,
+            u.email,
+            r.score,
+            e.total_marks,
+
+            COALESCE((
+                SELECT COUNT(*) 
+                 FROM cheat_logs c
+                WHERE 
+                    c.student_id = r.user_id
+                    AND c.exam_id = r.exam_id
+                    AND LOWER(TRIM(c.event_type)) = 'tab_switch'
+                ), 0) AS cheat_count
+
         FROM results r
         JOIN users u ON r.user_id = u.user_id
+        JOIN exams e ON r.exam_id = e.exam_id
+
         WHERE r.exam_id = %s
     """, (exam_id,))
 
-    data = cursor.fetchall()
+    results = cursor.fetchall()
+
+    print("DEBUG RESULTS:", results)  # ← IMPORTANT
+
     cursor.close()
     conn.close()
-    return data
+
+    return results
 
 
 def get_exam_cheat_logs(exam_id):
@@ -263,17 +323,18 @@ def get_exam_cheat_logs(exam_id):
 
 
 def log_cheat_event(user_id, exam_id, event_type):
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO cheat_logs (user_id, exam_id, event_type)
+        INSERT INTO cheat_logs (student_id, exam_id, event_type)
         VALUES (%s, %s, %s)
     """, (user_id, exam_id, event_type))
 
     cursor.execute("""
         SELECT COUNT(*) FROM cheat_logs
-        WHERE user_id=%s AND exam_id=%s
+        WHERE student_id=%s AND exam_id=%s
     """, (user_id, exam_id))
 
     count = cursor.fetchone()[0]
@@ -290,29 +351,41 @@ def log_cheat_event(user_id, exam_id, event_type):
 
 from datetime import datetime, timedelta
 
+import uuid
+
 def start_exam_if_not_started(user_id, exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT status FROM results
+        SELECT status, session_token FROM results
         WHERE user_id=%s AND exam_id=%s
     """, (user_id, exam_id))
 
     existing = cursor.fetchone()
 
     if not existing:
+
+        token = str(uuid.uuid4())
+
         cursor.execute("""
             INSERT INTO results 
-            (user_id, exam_id, score, total_marks, start_time, status)
-            SELECT %s, %s, 0, total_marks, NOW(), 'IN_PROGRESS'
+            (user_id, exam_id, score, total_marks, start_time, status, session_token)
+            SELECT %s, %s, 0, total_marks, NOW(), 'IN_PROGRESS', %s
             FROM exams WHERE exam_id=%s
-        """, (user_id, exam_id, exam_id))
+        """, (user_id, exam_id, token, exam_id))
 
         conn.commit()
 
+        cursor.close()
+        conn.close()
+
+        return token
+
     cursor.close()
     conn.close()
+
+    return existing["session_token"]
 
 
 def is_exam_time_over(user_id, exam_id):
@@ -438,3 +511,67 @@ def add_full_ai_exam(exam_id, subject, topic, difficulty, count):
     conn.close()
 
     return inserted_count
+
+# exam access codegenerator 
+import random
+import string
+
+def generate_exam_code():
+    letters = ''.join(random.choices(string.ascii_uppercase, k=2))
+    numbers = ''.join(random.choices(string.digits, k=4))
+    return f"{letters}{numbers}"
+
+
+
+def get_exam_by_code(exam_code):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT exam_id, title, duration_minutes, total_marks, start_time, end_time
+        FROM exams
+        WHERE exam_code = %s
+    """, (exam_code,))
+
+    exam = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return exam
+
+#attempt check 
+def get_exam_attempt(user_id, exam_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT status
+        FROM results
+        WHERE user_id=%s AND exam_id=%s
+    """, (user_id, exam_id))
+
+    attempt = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    return attempt
+
+
+def get_saved_answers(user_id, exam_id):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT question_id, selected_option, text_answer
+        FROM answers
+        WHERE user_id=%s AND exam_id=%s
+    """, (user_id, exam_id))
+
+    answers = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return answers

@@ -64,6 +64,7 @@ def generate_wrong_options(question, correct_answer):
     
 
 def generate_full_exam(subject, topic, difficulty, count):
+
     prompt = f"""
     Generate {count} multiple choice questions.
 
@@ -71,23 +72,17 @@ def generate_full_exam(subject, topic, difficulty, count):
     Topic: {topic}
     Difficulty: {difficulty}
 
-    Requirements:
-    - Each question must have:
-      question_text
-      correct_answer
-      wrong_options (exactly 3)
-      Ensure all questions are unique.
-      Avoid repeating concepts.
-      Keep options conceptually similar.
-      Do not include explanations.
-      
-    Return STRICT JSON array format:
+    STRICT REQUIREMENTS:
+    - Return ONLY JSON
+    - No explanation
+    - No markdown
+    - Format EXACTLY like:
 
     [
         {{
             "question_text": "...",
-            "correct_answer": "...",
-            "wrong_options": ["...", "...", "..."]
+            "options": ["A: ...", "B: ...", "C: ...", "D: ..."],
+            "correct": "A"
         }}
     ]
     """
@@ -98,11 +93,18 @@ def generate_full_exam(subject, topic, difficulty, count):
     )
 
     try:
-        text = response.text.strip()
+        text = response.text
 
+        if not text:
+            raise ValueError("Empty AI response")
+
+        text = text.strip()
+
+        # Remove markdown
         if "```" in text:
             text = text.split("```")[1].strip()
 
+        # Extract JSON
         start = text.find("[")
         end = text.rfind("]") + 1
 
@@ -116,10 +118,70 @@ def generate_full_exam(subject, topic, difficulty, count):
         if not isinstance(questions, list):
             raise ValueError("Invalid AI format")
 
+        # Validate structure
+        for q in questions:
+            if "question_text" not in q or "options" not in q or "correct" not in q:
+                raise ValueError("Invalid question format from AI")
+
         return questions
 
     except Exception as e:
+        print("AI RAW OUTPUT:", text)
         raise Exception(f"AI full exam parsing failed: {str(e)}")
+
+
+
+
+def generate_full_question(topic):
+
+    prompt = f"""
+    Generate ONE multiple choice question on topic: {topic}
+
+    Strict format:
+    Question: <question>
+    A: <option A>
+    B: <option B>
+    C: <option C>
+    D: <option D>
+    Correct: <A/B/C/D>
+    """
+
+    response = client.models.generate_content(
+        model="models/gemini-2.5-flash",
+        contents=prompt,
+    )
+
+    text = response.text.strip()
+
+    # DEBUG (very important)
+    print("\nAI RAW RESPONSE:\n", text)
+
+    lines = text.split("\n")
+
+    question = ""
+    options = []
+    correct = "A"
+
+    for line in lines:
+
+        if line.startswith("Question:"):
+            question = line.replace("Question:", "").strip()
+
+        elif line.startswith(("A:", "B:", "C:", "D:")):
+            options.append(line)
+
+        elif "Correct" in line:
+            correct = line.split(":")[-1].strip()
+
+    # fallback safety
+    if len(options) < 4:
+        raise Exception("AI response parsing failed")
+
+    return {
+        "question": question,
+        "options": options,
+        "correct": correct
+    }
 
 
 
