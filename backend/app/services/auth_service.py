@@ -1,10 +1,9 @@
-from backend.database import get_db_connection
-from backend.app.utils.password_utils import hash_password, verify_password
-from werkzeug.security import generate_password_hash
+from database import get_db_connection
+from app.utils.password_utils import hash_password, verify_password
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 def register_user(name, email, password, organization):
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -16,20 +15,17 @@ def register_user(name, email, password, organization):
     """, (name, email, hashed_password, organization))
 
     conn.commit()
-
     cursor.close()
     conn.close()
 
     return True
 
-from werkzeug.security import check_password_hash
 
 def login_user(email, password):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    query = "SELECT * FROM users WHERE email = %s"
-    cursor.execute(query, (email,))
+    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
 
     cursor.close()
@@ -38,7 +34,6 @@ def login_user(email, password):
     if not user:
         return False, "User not found"
 
-    # verify hashed password
     if not check_password_hash(user["password"], password):
         return False, "Invalid password"
 
@@ -49,10 +44,7 @@ def get_user_role(user_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute(
-        "SELECT role FROM users WHERE user_id = %s",
-        (user_id,)
-    )
+    cursor.execute("SELECT role FROM users WHERE user_id = %s", (user_id,))
     user = cursor.fetchone()
 
     cursor.close()

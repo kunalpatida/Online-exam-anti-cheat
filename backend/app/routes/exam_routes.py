@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+import random
 
-# Services
-from backend.database import get_db_connection
-from backend.app.services.exam_service import (
+from database import get_db_connection
+from app.services.exam_service import (
     create_exam,
     add_question,
     get_all_exams,
@@ -19,9 +19,7 @@ from backend.app.services.exam_service import (
     get_exam_attempt,
     add_ai_generated_question
 )
-
-# AI Services
-from backend.app.services.ai_service import (
+from app.services.ai_service import (
     generate_wrong_options,
     generate_full_exam,
     generate_full_question
@@ -37,7 +35,6 @@ exam_bp = Blueprint("exam", __name__)
 @exam_bp.route("/create", methods=["POST"])
 @jwt_required()
 def create_exam_api():
-
     user_id = int(get_jwt_identity())
     data = request.json
 
@@ -50,10 +47,7 @@ def create_exam_api():
         end_time=data.get("end_time")
     )
 
-    return jsonify({
-        "message": "Exam created successfully",
-        "exam_code": exam_code
-    }), 201
+    return jsonify({"message": "Exam created successfully", "exam_code": exam_code}), 201
 
 
 # ==========================================================
@@ -63,7 +57,6 @@ def create_exam_api():
 @exam_bp.route("/add-question", methods=["POST"])
 @jwt_required()
 def add_question_api():
-
     data = request.json
 
     add_question(
@@ -87,10 +80,8 @@ def add_question_api():
 @exam_bp.route("/list", methods=["GET"])
 @jwt_required()
 def list_exams():
-
     user_id = int(get_jwt_identity())
     exams = get_all_exams(user_id)
-
     return jsonify(exams), 200
 
 
@@ -101,52 +92,41 @@ def list_exams():
 @exam_bp.route("/join", methods=["POST"])
 @jwt_required()
 def join_exam():
-
     user_id = int(get_jwt_identity())
     data = request.json
 
     exam_code = data.get("exam_code")
-
     if not exam_code:
         return jsonify({"error": "exam_code is required"}), 400
 
     exam = get_exam_by_code(exam_code)
-
     if not exam:
         return jsonify({"error": "Invalid exam code"}), 404
 
     from datetime import datetime
-
     start = exam.get("start_time")
     end = exam.get("end_time")
     now = datetime.now()
 
     if start and now < start:
         return jsonify({"error": "Exam has not started yet"}), 403
-
     if end and now > end:
         return jsonify({"error": "Exam window has closed"}), 403
 
     attempt = get_exam_attempt(user_id, exam["exam_id"])
-
     if attempt and attempt["status"] == "SUBMITTED":
         return jsonify({"error": "You have already completed this exam"}), 403
 
-    return jsonify({
-        "message": "Exam ready",
-        "exam": exam
-    }), 200
+    return jsonify({"message": "Exam ready", "exam": exam}), 200
 
 
 # ==========================================================
 # LOAD QUESTIONS
 # ==========================================================
-import random
 
 @exam_bp.route("/questions/<int:exam_id>", methods=["GET"])
 @jwt_required()
 def get_exam_questions(exam_id):
-
     user_id = int(get_jwt_identity())
 
     conn = get_db_connection()
@@ -156,7 +136,6 @@ def get_exam_questions(exam_id):
         SELECT status, start_time FROM results
         WHERE user_id=%s AND exam_id=%s
     """, (user_id, exam_id))
-
     result = cursor.fetchone()
 
     if result and result["status"] in ["SUBMITTED", "TERMINATED"]:
@@ -166,23 +145,18 @@ def get_exam_questions(exam_id):
 
     session_token = start_exam_if_not_started(user_id, exam_id)
 
-    cursor.execute("""
-        SELECT duration_minutes FROM exams WHERE exam_id=%s
-    """, (exam_id,))
+    cursor.execute("SELECT duration_minutes FROM exams WHERE exam_id=%s", (exam_id,))
     exam = cursor.fetchone()
 
     cursor.execute("""
-        SELECT start_time FROM results
-        WHERE user_id=%s AND exam_id=%s
+        SELECT start_time FROM results WHERE user_id=%s AND exam_id=%s
     """, (user_id, exam_id))
     updated = cursor.fetchone()
 
     from datetime import datetime, timedelta
-
     start_time = updated["start_time"]
     duration = timedelta(minutes=exam["duration_minutes"])
     end_time = start_time + duration
-
     remaining = (end_time - datetime.now()).total_seconds()
 
     if remaining <= 0:
@@ -191,78 +165,51 @@ def get_exam_questions(exam_id):
         conn.close()
         return jsonify({"error": "Time over. Exam auto-submitted"}), 403
 
-    # ==========================================
-    # FETCH QUESTIONS
-    # ==========================================
     questions = get_questions_by_exam(exam_id)
 
-    # ==========================================
-    # SHUFFLE LOGIC (IMPORTANT)
-    # ==========================================
     shuffled_questions = []
-
     for q in questions:
-
-        # Only shuffle MCQ
         if (q.get("question_type") or "").lower() == "mcq":
-
             options = [
                 ("A", q.get("option_a")),
                 ("B", q.get("option_b")),
                 ("C", q.get("option_c")),
                 ("D", q.get("option_d"))
             ]
-
-            # Remove empty options (safety)
             options = [opt for opt in options if opt[1]]
-             
-             #step 1:
+
             correct_label = q.get("correct_option")
             correct_text = None
-
             for label, text in options:
                 if label == correct_label:
                     correct_text = text
                     break
 
-            # step 2: Shuffle options
             random.shuffle(options)
-
-            # step 3: rebuild mapping   
-            
-            labels = ["A","B","C","D"]
+            labels = ["A", "B", "C", "D"]
             new_options = {}
             new_correct = None
-            
 
             for i, (_, text) in enumerate(options):
                 new_label = labels[i]
                 new_options[f"option_{new_label.lower()}"] = text
-
                 if text == correct_text:
                     new_correct = new_label
 
-            # Update question with shuffled options
             q.update(new_options)
             q["correct_option"] = new_correct
 
         shuffled_questions.append(q)
 
-    # Shuffle question order
     random.shuffle(shuffled_questions)
 
-    questions = shuffled_questions
-
-    # ==========================================
-    # FETCH SAVED ANSWERS
-    # ==========================================
     answers = get_saved_answers(user_id, exam_id)
 
     cursor.close()
     conn.close()
 
     return jsonify({
-        "questions": questions,
+        "questions": shuffled_questions,
         "answers": answers,
         "remaining_seconds": int(remaining),
         "session_token": session_token
@@ -276,7 +223,6 @@ def get_exam_questions(exam_id):
 @exam_bp.route("/save-answer", methods=["POST"])
 @jwt_required()
 def save_answer_api():
-
     user_id = int(get_jwt_identity())
     data = request.json
 
@@ -302,7 +248,6 @@ def save_answer_api():
 @exam_bp.route("/submit", methods=["POST"])
 @jwt_required()
 def submit_exam_api():
-
     user_id = int(get_jwt_identity())
     exam_id = request.json["exam_id"]
 
@@ -322,11 +267,9 @@ def submit_exam_api():
 @exam_bp.route("/log-cheat", methods=["POST"])
 @jwt_required()
 def log_cheat_api():
-
     user_id = int(get_jwt_identity())
     data = request.json
 
-    # Correct extraction
     exam_id = data.get("exam_id")
     event_type = data.get("event_type")
 
@@ -338,20 +281,14 @@ def log_cheat_api():
 
         if count >= 3:
             submit_exam(user_id, exam_id)
-            return jsonify({
-                "message": "Exam auto-submitted due to cheating",
-                "terminated": True
-            }), 200
+            return jsonify({"message": "Exam auto-submitted due to cheating", "terminated": True}), 200
 
-        return jsonify({
-            "message": "Cheat logged",
-            "warnings": count
-        }), 200
+        return jsonify({"message": "Cheat logged", "warnings": count}), 200
 
     except Exception as e:
         print("CHEAT LOG ERROR:", str(e))
         return jsonify({"error": "Failed to log cheat"}), 500
-    
+
 
 # ==========================================================
 # AI FEATURES
@@ -360,7 +297,6 @@ def log_cheat_api():
 @exam_bp.route("/ai-generate-options", methods=["POST"])
 @jwt_required()
 def ai_generate_options_api():
-
     data = request.json
 
     if not data.get("question") or not data.get("correct_answer"):
@@ -371,20 +307,14 @@ def ai_generate_options_api():
             question=data["question"],
             correct_answer=data["correct_answer"]
         )
-
         return jsonify({"wrong_options": wrong_options}), 200
-
     except Exception as e:
-        return jsonify({
-            "error": "AI generation failed",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "AI generation failed", "details": str(e)}), 500
 
 
 @exam_bp.route("/ai-generate-question", methods=["POST"])
 @jwt_required()
 def ai_generate_question():
-
     data = request.json
     topic = data.get("topic")
 
@@ -394,20 +324,14 @@ def ai_generate_question():
     try:
         result = generate_full_question(topic)
         return jsonify(result), 200
-
     except Exception as e:
-        return jsonify({
-            "error": "AI failed",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "AI failed", "details": str(e)}), 500
 
 
 @exam_bp.route("/ai-generate-full-exam", methods=["POST"])
 @jwt_required()
 def ai_generate_full_exam_api():
-
     data = request.json
-
     required = ["subject", "topic", "difficulty", "count"]
 
     if not all(field in data for field in required):
@@ -420,81 +344,52 @@ def ai_generate_full_exam_api():
             difficulty=data["difficulty"],
             count=data["count"]
         )
-
         return jsonify({"questions": questions}), 200
-
     except Exception as e:
-        return jsonify({
-            "error": "AI full exam generation failed",
-            "details": str(e)
-        }), 500
-    
+        return jsonify({"error": "AI full exam generation failed", "details": str(e)}), 500
+
 
 # ==========================================================
 # RESULT PAGE
-# ==========================================================   
+# ==========================================================
+
 @exam_bp.route("/results/<int:exam_id>", methods=["GET"])
 @jwt_required()
 def get_results_api(exam_id):
-
-    print("HIT RESULTS ROUTE:", exam_id)  # 👈 ADD
-
     try:
         results = get_exam_results(exam_id)
-
-        print("RESULT DATA:", results)    # 👈 ADD
-
         return jsonify(results), 200
-
     except Exception as e:
-        print("ERROR IN RESULTS:", str(e))  # 👈 ADD
+        print("ERROR IN RESULTS:", str(e))
         return jsonify({"error": str(e)}), 500
-    
 
-    
+
 # ==========================================================
-# Profile 
-# ==========================================================   
+# PROFILE
+# ==========================================================
 
 @exam_bp.route("/profile", methods=["GET"])
 @jwt_required()
 def get_profile():
-
     user_id = int(get_jwt_identity())
-
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # user
         cursor.execute("SELECT * FROM users WHERE user_id=%s", (user_id,))
         user = cursor.fetchone()
 
         if not user:
             return jsonify({"error": "User not found"}), 404
 
-        name = user.get("name") or "User"
-        email = user.get("email")
-
-        # 🔥 FIXED HERE
-        cursor.execute(
-            "SELECT COUNT(*) as created FROM exams WHERE created_by=%s",
-            (user_id,)
-        )
+        cursor.execute("SELECT COUNT(*) as created FROM exams WHERE created_by=%s", (user_id,))
         created = cursor.fetchone()["created"]
 
-        # attempted
-        cursor.execute(
-            "SELECT COUNT(*) as attempted FROM results WHERE user_id=%s",
-            (user_id,)
-        )
+        cursor.execute("SELECT COUNT(*) as attempted FROM results WHERE user_id=%s", (user_id,))
         attempted = cursor.fetchone()["attempted"]
 
         return jsonify({
-            "user": {
-                "name": name,
-                "email": email
-            },
+            "user": {"name": user.get("name"), "email": user.get("email")},
             "created": created,
             "attempted": attempted
         })
@@ -507,14 +402,14 @@ def get_profile():
         cursor.close()
         conn.close()
 
-    
+
 # ==========================================================
-# Analytics page
-# ==========================================================   
+# ANALYTICS
+# ==========================================================
+
 @exam_bp.route("/analytics/<int:exam_id>", methods=["GET"])
 @jwt_required()
 def get_exam_analytics(exam_id):
-
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -523,38 +418,26 @@ def get_exam_analytics(exam_id):
             COUNT(*) as total_students,
             AVG(score) as avg_score,
             MAX(score) as highest_score
-        FROM results
-        WHERE exam_id=%s
+        FROM results WHERE exam_id=%s
     """, (exam_id,))
-    
     stats = cursor.fetchone()
 
-    cursor.execute("""
-        SELECT COUNT(*) as total_cheats
-        FROM cheat_logs
-        WHERE exam_id=%s
-    """, (exam_id,))
-    
+    cursor.execute("SELECT COUNT(*) as total_cheats FROM cheat_logs WHERE exam_id=%s", (exam_id,))
     cheats = cursor.fetchone()["total_cheats"]
 
     cursor.close()
     conn.close()
 
-    return jsonify({
-        "stats": stats,
-        "cheats": cheats
-    })
+    return jsonify({"stats": stats, "cheats": cheats})
 
 
-# ==========================================
-# DESCRIPTIVE ANSWERS API
-# ==========================================
+# ==========================================================
+# DESCRIPTIVE ANSWERS
+# ==========================================================
+
 @exam_bp.route("/answers/<int:exam_id>", methods=["GET"])
 @jwt_required()
 def get_answers_api(exam_id):
-
-    from backend.database import get_db_connection
-
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -562,7 +445,7 @@ def get_answers_api(exam_id):
         SELECT 
             u.user_id,
             u.name,
-            q.question_id,   -- 🔥 IMPORTANT FIX
+            q.question_id,
             q.question_text,
             a.text_answer
         FROM answers a
@@ -574,24 +457,19 @@ def get_answers_api(exam_id):
     """, (exam_id,))
 
     data = cursor.fetchall()
-
-    print("DEBUG ANSWERS:", data)   # 🔥 DEBUG LINE
-
     cursor.close()
     conn.close()
 
     return jsonify(data), 200
 
 
-# ==========================================
+# ==========================================================
 # EVALUATE DESCRIPTIVE MARKS
-# ==========================================
+# ==========================================================
+
 @exam_bp.route("/evaluate", methods=["POST"])
 @jwt_required()
 def evaluate_api():
-
-    from backend.database import get_db_connection
-
     data = request.json
 
     user_id = data.get("user_id")
@@ -602,7 +480,6 @@ def evaluate_api():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # 🔥 GET LIMIT
     cursor.execute("SELECT total_marks FROM exams WHERE exam_id=%s", (exam_id,))
     total_marks = cursor.fetchone()["total_marks"]
 
@@ -614,14 +491,11 @@ def evaluate_api():
     if marks > marks_per_q:
         return jsonify({"error": f"Max allowed {marks_per_q}"}), 400
 
-    # 🔥 SAVE MARKS PER QUESTION
     cursor.execute("""
-        UPDATE answers
-        SET marks=%s
+        UPDATE answers SET marks=%s
         WHERE user_id=%s AND exam_id=%s AND question_id=%s
     """, (marks, user_id, exam_id, question_id))
 
-    # 🔥 RE-CALCULATE TOTAL SCORE
     cursor.execute("""
         SELECT 
             q.correct_option,
@@ -637,22 +511,17 @@ def evaluate_api():
     """, (user_id, exam_id, exam_id))
 
     questions = cursor.fetchall()
-
     total_score = 0
 
     for q in questions:
-
         if (q["question_type"] or "").lower() == "mcq":
             if q["selected_option"] == q["correct_option"]:
                 total_score += marks_per_q
-
         else:
             total_score += q.get("marks", 0) or 0
 
-    # 🔥 UPDATE FINAL SCORE
     cursor.execute("""
-        UPDATE results
-        SET score=%s, evaluation_status='FINAL'
+        UPDATE results SET score=%s, evaluation_status='FINAL'
         WHERE user_id=%s AND exam_id=%s
     """, (round(total_score, 2), user_id, exam_id))
 
