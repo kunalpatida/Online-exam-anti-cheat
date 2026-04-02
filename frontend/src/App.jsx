@@ -17,8 +17,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
   return (
-
-  
+    <BrowserRouter>
       <Routes>
 
         <Route path="/" element={<Home />} />
@@ -65,6 +64,6 @@ export default function App() {
         <Route path="/exam-submitted" element={<ExamSubmitted />} />
 
       </Routes>
-    
+    </BrowserRouter>
   );
 }

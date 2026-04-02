@@ -3,11 +3,10 @@ import json
 from google import genai
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Create Gemini client
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
 
 def generate_wrong_options(question, correct_answer):
     prompt = f"""
@@ -32,25 +31,19 @@ def generate_wrong_options(question, correct_answer):
 
     try:
         text = response.text
-
         if not text:
             raise ValueError("Empty AI response")
 
         text = text.strip()
-
-        # Remove markdown blocks if present
         if "```" in text:
             text = text.split("```")[1].strip()
 
-        # Try extracting JSON array if extra text exists
         start = text.find("[")
         end = text.rfind("]") + 1
-
         if start == -1 or end == -1:
             raise ValueError("JSON array not found in AI response")
 
         json_text = text[start:end]
-
         options = json.loads(json_text)
 
         if not isinstance(options, list) or len(options) != 3:
@@ -60,11 +53,9 @@ def generate_wrong_options(question, correct_answer):
 
     except Exception as e:
         raise Exception(f"AI response parsing failed: {str(e)}")
-    
-    
+
 
 def generate_full_exam(subject, topic, difficulty, count):
-
     prompt = f"""
     Generate {count} multiple choice questions.
 
@@ -94,31 +85,24 @@ def generate_full_exam(subject, topic, difficulty, count):
 
     try:
         text = response.text
-
         if not text:
             raise ValueError("Empty AI response")
 
         text = text.strip()
-
-        # Remove markdown
         if "```" in text:
             text = text.split("```")[1].strip()
 
-        # Extract JSON
         start = text.find("[")
         end = text.rfind("]") + 1
-
         if start == -1 or end == -1:
             raise ValueError("JSON array not found")
 
         json_text = text[start:end]
-
         questions = json.loads(json_text)
 
         if not isinstance(questions, list):
             raise ValueError("Invalid AI format")
 
-        # Validate structure
         for q in questions:
             if "question_text" not in q or "options" not in q or "correct" not in q:
                 raise ValueError("Invalid question format from AI")
@@ -130,10 +114,7 @@ def generate_full_exam(subject, topic, difficulty, count):
         raise Exception(f"AI full exam parsing failed: {str(e)}")
 
 
-
-
 def generate_full_question(topic):
-
     prompt = f"""
     Generate ONE multiple choice question on topic: {topic}
 
@@ -152,8 +133,6 @@ def generate_full_question(topic):
     )
 
     text = response.text.strip()
-
-    # DEBUG (very important)
     print("\nAI RAW RESPONSE:\n", text)
 
     lines = text.split("\n")
@@ -163,17 +142,13 @@ def generate_full_question(topic):
     correct = "A"
 
     for line in lines:
-
         if line.startswith("Question:"):
             question = line.replace("Question:", "").strip()
-
         elif line.startswith(("A:", "B:", "C:", "D:")):
             options.append(line)
-
         elif "Correct" in line:
             correct = line.split(":")[-1].strip()
 
-    # fallback safety
     if len(options) < 4:
         raise Exception("AI response parsing failed")
 
@@ -182,8 +157,3 @@ def generate_full_question(topic):
         "options": options,
         "correct": correct
     }
-
-
-
-
-
