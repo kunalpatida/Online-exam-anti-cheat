@@ -1,266 +1,155 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
 import api from "../api/axios";
+import { useToast } from "../components/Toast";
 
 export default function Dashboard() {
-
   const navigate = useNavigate();
-
+  const toast = useToast();
   const [examCode, setExamCode] = useState("");
   const [exams, setExams] = useState([]);
   const [user, setUser] = useState(null);
+  const [joining, setJoining] = useState(false);
 
-  // ================================
-  // LOAD USER + EXAMS
-  // ================================
   useEffect(() => {
-
-    const loadData = async () => {
-
+    (async () => {
       try {
-
-        const profileRes = await api.get("/exam/profile");
-        setUser(profileRes.data.user);
-
-        const examRes = await api.get("/exam/list");
-        setExams(Array.isArray(examRes.data) ? examRes.data : []);
-
-      } catch (err) {
-        console.error("Dashboard load error:", err);
-      }
-
-    };
-
-    loadData();
-
+        const [profile, examList] = await Promise.all([
+          api.get("/exam/profile"),
+          api.get("/exam/list"),
+        ]);
+        setUser(profile.data.user);
+        setExams(Array.isArray(examList.data) ? examList.data : []);
+      } catch { toast("Failed to load data", "error"); }
+    })();
   }, []);
 
-  // ================================
-  // JOIN EXAM
-  // ================================
-  const handleJoinExam = async () => {
-
-    if (!examCode) {
-      alert("Enter exam code");
-      return;
-    }
-
+  const handleJoin = async () => {
+    if (!examCode.trim()) return toast("Enter exam code", "error");
+    setJoining(true);
     try {
-
-      const res = await api.post("/exam/join", {
-        exam_code: examCode
-      });
-
+      const res = await api.post("/exam/join", { exam_code: examCode.trim().toUpperCase() });
       navigate(`/exam/${res.data.exam.exam_id}`);
-
-    } catch {
-      alert("Invalid or expired exam code");
-    }
+    } catch (err) {
+      toast(err.response?.data?.error || "Invalid or expired exam code", "error");
+    } finally { setJoining(false); }
   };
 
-  // ================================
-  // COPY CODE
-  // ================================
   const copyCode = (code) => {
     navigator.clipboard.writeText(code);
-    alert("Copied: " + code);
-  };
-
-  // ================================
-  // LOGOUT
-  // ================================
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/login");
+    toast(`Copied: ${code}`, "info");
   };
 
   return (
-
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-blue-100 p-8">
-
-      {/* HEADER */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex justify-between items-center mb-10"
-      >
-
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">
-            Dashboard
-          </h1>
-          <p className="text-gray-500 text-sm">
-            Welcome {user?.name || "User"}
-          </p>
+    <div style={{ position: "relative", zIndex: 1 }}>
+      <nav className="navbar">
+        <span className="nav-logo">SmartExam AI</span>
+        <div className="flex-gap">
+          <Link to="/profile">
+            <div className="avatar" title="Profile">
+              {user?.name?.charAt(0).toUpperCase() || "U"}
+            </div>
+          </Link>
         </div>
+      </nav>
 
-        {/* 🔥 AVATAR */}
-        <Link to="/profile">
-          <div
-            title="Profile"
-            className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white flex items-center justify-center text-lg font-bold shadow-md hover:scale-110 transition"
-          >
-            {user?.name?.charAt(0).toUpperCase() || "U"}
+      <div className="page">
+        <div className="container">
+          {/* Header */}
+          <div className="anim-fade-up" style={{ marginBottom: 32 }}>
+            <h1 style={{ fontSize: "1.8rem", marginBottom: 4 }}>
+              Welcome, <span className="gradient-text">{user?.name || "there"}</span> 👋
+            </h1>
+            <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Manage your exams and track student progress</p>
           </div>
-        </Link>
 
-      </motion.div>
+          {/* Action cards */}
+          <div className="grid-2 anim-fade-up anim-delay-1" style={{ marginBottom: 32 }}>
+            {/* Join */}
+            <div className="glass" style={{ padding: "28px 24px" }}>
+              <h3 style={{ marginBottom: 6 }}>🎯 Join Exam</h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 16 }}>Enter code to start an exam</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <input className="input" placeholder="Exam code..."
+                  value={examCode} onChange={e => setExamCode(e.target.value.toUpperCase())}
+                  onKeyDown={e => e.key === "Enter" && handleJoin()}
+                  style={{ flex: 1 }} />
+                <button className="btn btn-primary" onClick={handleJoin} disabled={joining}>
+                  {joining ? <span className="spinner" /> : "Join"}
+                </button>
+              </div>
+            </div>
 
+            {/* Create */}
+            <div className="glass" style={{ padding: "28px 24px" }}>
+              <h3 style={{ marginBottom: 6 }}>✨ Create Exam</h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 16 }}>
+                Build a new exam with AI assistance
+              </p>
+              <button className="btn btn-success btn-full" onClick={() => navigate("/create-exam")}>
+                + Create New Exam
+              </button>
+            </div>
+          </div>
 
-      {/* ACTION CARDS */}
-      <div className="grid md:grid-cols-2 gap-8 mb-14">
-
-        {/* JOIN EXAM */}
-        <motion.div
-          whileHover={{ scale: 1.03 }}
-          className="bg-white p-8 rounded-2xl shadow-md hover:shadow-xl transition"
-        >
-
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">
-            Join Exam
-          </h2>
-
-          <input
-            type="text"
-            placeholder="Enter exam code..."
-            value={examCode}
-            onChange={(e) => setExamCode(e.target.value)}
-            className="border w-full p-3 rounded-lg mb-4 focus:ring-2 focus:ring-blue-400 outline-none"
-          />
-
-          <button
-            onClick={handleJoinExam}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg w-full hover:bg-blue-700 transition"
-          >
-            Join Now
-          </button>
-
-        </motion.div>
-
-
-        {/* CREATE EXAM */}
-        <motion.div
-          whileHover={{ scale: 1.03 }}
-          className="bg-white p-8 rounded-2xl shadow-md hover:shadow-xl transition"
-        >
-
-          <h2 className="text-xl font-semibold mb-2 text-gray-800">
-            Create Exam
-          </h2>
-
-          <p className="text-gray-500 mb-4 text-sm">
-            Create a new exam and share it with students.
-          </p>
-
-          <button
-            onClick={() => navigate("/create-exam")}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition w-full"
-          >
-            Create New Exam
-          </button>
-
-        </motion.div>
-
-      </div>
-
-
-      {/* EXAMS TABLE */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-
-        <h2 className="text-2xl font-semibold mb-6 text-gray-800">
-          My Exams
-        </h2>
-
-        <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-
-          <table className="w-full text-left">
-
-            <thead className="bg-gray-50 text-gray-600 text-sm">
-              <tr>
-                <th className="p-4">Title</th>
-                <th>Duration</th>
-                <th>Marks</th>
-                <th>Code</th>
-                <th className="text-center">Attempts</th>
-                <th className="text-center">Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {exams.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="text-center py-8 text-gray-400">
-                    No exams created yet
-                  </td>
-                </tr>
-              ) : (
-
-                exams.map((exam) => (
-
-                  <tr
-                    key={exam.exam_id}
-                    className="border-t hover:bg-gray-50 transition"
-                  >
-
-                    <td className="p-4 font-medium text-gray-800">
-                      {exam.title}
-                    </td>
-
-                    <td>{exam.duration_minutes} min</td>
-
-                    <td>{exam.total_marks}</td>
-
-                    <td className="font-mono text-blue-600">
-                      {exam.exam_code}
-                    </td>
-
-                    <td className="text-center">
-                      <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs">
-                        {exam.attempts || 0}
-                      </span>
-                    </td>
-
-                    <td className="text-center flex justify-center gap-2 py-3">
-
-                      <button
-                        onClick={() => copyCode(exam.exam_code)}
-                        className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300 text-sm"
-                      >
-                        Copy
-                      </button>
-
-                      <Link
-                        to={`/results/${exam.exam_id}`}
-                        className="bg-green-500 text-white px-3 py-1 rounded text-sm"
-                      >
-                        Results
-                      </Link>
-
-                      <Link
-                        to={`/analytics/${exam.exam_id}`}
-                        className="bg-purple-500 text-white px-3 py-1 rounded text-sm"
-                      >
-                        Analytics
-                      </Link>
-
-                    </td>
-
+          {/* Exams table */}
+          <div className="glass anim-fade-up anim-delay-2" style={{ overflow: "hidden" }}>
+            <div style={{ padding: "20px 24px 0", marginBottom: 4 }}>
+              <h3>My Exams</h3>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th className="hide-mobile">Duration</th>
+                    <th className="hide-mobile">Marks</th>
+                    <th>Code</th>
+                    <th>Attempts</th>
+                    <th>Actions</th>
                   </tr>
-
-                ))
-
-              )}
-
-            </tbody>
-
-          </table>
-
+                </thead>
+                <tbody>
+                  {exams.length === 0 ? (
+                    <tr><td colSpan={6}>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">📋</div>
+                        <div>No exams created yet</div>
+                      </div>
+                    </td></tr>
+                  ) : exams.map(exam => (
+                    <tr key={exam.exam_id}>
+                      <td>{exam.title}</td>
+                      <td className="hide-mobile">{exam.duration_minutes} min</td>
+                      <td className="hide-mobile">{exam.total_marks}</td>
+                      <td>
+                        <span style={{ fontFamily: "monospace", color: "var(--purple)", fontSize: 13 }}>
+                          {exam.exam_code}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge badge-blue">{exam.attempts || 0}</span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <button className="btn btn-secondary btn-sm"
+                            onClick={() => copyCode(exam.exam_code)}>Copy</button>
+                          <Link to={`/results/${exam.exam_id}`}
+                            className="btn btn-success btn-sm">Results</Link>
+                          <Link to={`/analytics/${exam.exam_id}`}
+                            className="btn btn-sm" style={{ background: "rgba(167,139,250,0.2)", color: "var(--purple)", border: "1px solid rgba(167,139,250,0.3)" }}>
+                            Analytics
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-
-      </motion.div>
-      
+      </div>
     </div>
   );
 }
