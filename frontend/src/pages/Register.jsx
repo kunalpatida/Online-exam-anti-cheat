@@ -1,120 +1,67 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import { useToast } from "../components/Toast";
 
 export default function Register() {
-
   const navigate = useNavigate();
+  const toast = useToast();
+  const [form, setForm] = useState({ name: "", email: "", organization: "", password: "" });
+  const [loading, setLoading] = useState(false);
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [organization, setOrganization] = useState("");
-  const [password, setPassword] = useState("");
+  const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
 
   const handleRegister = async (e) => {
-
     e.preventDefault();
-
+    setLoading(true);
     try {
-
-      await api.post("/auth/register", {
-        name,
-        email,
-        password,
-        organization
-      });
-
-      alert("Registration successful. Please login.");
-
+      await api.post("/auth/register", form);
+      toast("Account created! Please login.", "success");
       navigate("/login");
-
-    } catch (error) {
-
-      alert("Registration failed");
-
-      console.error(error);
-
+    } catch (err) {
+      toast(err.response?.data?.error || "Registration failed", "error");
+    } finally {
+      setLoading(false);
     }
-
   };
 
   return (
+    <div className="auth-page">
+      <div className="auth-card glass-strong anim-scale-in">
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800,
+            background: "var(--grad-accent2)", WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent", backgroundClip: "text", marginBottom: 8 }}>
+            SmartExam AI
+          </div>
+          <h2 style={{ fontSize: "1.5rem", marginBottom: 6 }}>Create account</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Join thousands of educators</p>
+        </div>
 
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-100">
-
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="bg-white p-10 rounded-xl shadow-lg w-full max-w-md"
-      >
-
-        <h1 className="text-3xl font-bold mb-6 text-center text-blue-600">
-          Create Account
-        </h1>
-
-        <form onSubmit={handleRegister} className="space-y-4">
-
-          <input
-            type="text"
-            placeholder="Full Name"
-            value={name}
-            onChange={(e)=>setName(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e)=>setEmail(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <input
-            type="text"
-            placeholder="College / Organization"
-            value={organization}
-            onChange={(e)=>setOrganization(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e)=>setPassword(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition"
-          >
-            Register
+        <form onSubmit={handleRegister}>
+          {[
+            { key: "name",         label: "Full Name",           type: "text",     ph: "John Doe" },
+            { key: "email",        label: "Email",               type: "email",    ph: "you@example.com" },
+            { key: "organization", label: "College / School",    type: "text",     ph: "MIT University" },
+            { key: "password",     label: "Password",            type: "password", ph: "••••••••" },
+          ].map(f => (
+            <div className="input-group" key={f.key}>
+              <label className="input-label">{f.label}</label>
+              <input className="input" type={f.type} placeholder={f.ph}
+                value={form[f.key]} onChange={set(f.key)} required />
+            </div>
+          ))}
+          <button type="submit" className="btn btn-primary btn-lg btn-full"
+            style={{ marginTop: 8 }} disabled={loading}>
+            {loading ? <><span className="spinner" /> Creating...</> : "Create Account →"}
           </button>
-
         </form>
 
-        <p className="text-center mt-6 text-gray-600">
-
+        <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "var(--text-muted)" }}>
           Already have an account?{" "}
-
-          <Link to="/login" className="text-blue-600 hover:underline">
-            Login
-          </Link>
-
+          <Link to="/login" style={{ color: "var(--purple)", textDecoration: "none" }}>Login</Link>
         </p>
-
-      </motion.div>
-
+      </div>
     </div>
-
   );
-
 }
