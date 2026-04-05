@@ -1,199 +1,162 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import api from "../api/axios";
 
 export default function ExamPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(0);
+  const [answers, setAnswers]     = useState({});
+  const [timeLeft, setTimeLeft]   = useState(0);
   const [cheatCount, setCheatCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [examTitle, setExamTitle] = useState("Online Examination");
-  const finishedRef = useRef(false);
+  const [loading, setLoading]     = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const finished = useRef(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.get(`/exam/questions/${id}`);
-        setQuestions(res.data.questions || []);
-        setTimeLeft(res.data.remaining_seconds || 0);
-        if (res.data.answers) {
-          const map = {};
-          res.data.answers.forEach(a => {
-            map[a.question_id] = a.selected_option || a.text_answer || "";
-          });
-          setAnswers(map);
-        }
-      } catch (err) {
-        const msg = err.response?.data?.error || "";
-        if (msg.includes("already completed") || msg.includes("Time over")) {
-          alert(msg);
-          navigate("/dashboard");
-        }
-      } finally { setLoading(false); }
-    })();
-  }, [id]);
+  useEffect(()=>{
+    api.get(`/exam/questions/${id}`).then(r=>{
+      setQuestions(Array.isArray(r.data.questions)?r.data.questions:[]);
+      setTimeLeft(r.data.remaining_seconds||0);
+      if(r.data.answers){
+        const m={};
+        r.data.answers.forEach(a=>{ m[a.question_id]=a.selected_option||a.text_answer||""; });
+        setAnswers(m);
+      }
+    }).catch(err=>{
+      const msg=err.response?.data?.error||"";
+      if(msg==="Exam already completed"){alert("You already completed this exam");navigate("/dashboard");}
+      else if(msg.includes("Time over")){alert("Exam time is over");navigate("/dashboard");}
+      else{alert(msg||"Failed to load");navigate("/dashboard");}
+    }).finally(()=>setLoading(false));
+  },[id,navigate]);
 
-  const autoSubmit = async () => {
-    if (finishedRef.current) return;
-    finishedRef.current = true;
-    try {
-      await api.post("/exam/submit", { exam_id: id });
-    } catch {}
-    navigate("/dashboard", { replace: true });
+  const submit = async (reason="manual") => {
+    if(finished.current) return;
+    finished.current=true; setSubmitting(true);
+    try{ await api.post("/exam/submit",{exam_id:id}); }catch{}
+    navigate("/dashboard",{replace:true});
   };
 
-  // Timer
-  useEffect(() => {
-    if (loading) return;
-    const t = setInterval(() => {
-      setTimeLeft(p => {
-        if (p <= 1) { clearInterval(t); autoSubmit(); return 0; }
-        return p - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [loading]);
+  useEffect(()=>{
+    if(loading) return;
+    const t=setInterval(()=>setTimeLeft(s=>{ if(s<=1){clearInterval(t);submit("timeout");return 0;} return s-1; }),1000);
+    return()=>clearInterval(t);
+  },[loading]);
 
-  // Cheat detection
-  useEffect(() => {
-    if (loading) return;
-    let count = 0, lastTime = 0;
-    const detect = async () => {
-      if (finishedRef.current) return;
-      const now = Date.now();
-      if (now - lastTime < 800) return;
-      lastTime = now;
-      count++;
-      setCheatCount(count);
-      try { await api.post("/exam/log-cheat", { exam_id: id, event_type: "tab_switch" }); } catch {}
-      if (count >= 3) { alert("Exam terminated: 3 tab switch violations"); autoSubmit(); }
-      else alert(`⚠️ Tab switch detected (${count}/3)`);
+  useEffect(()=>{
+    if(loading) return;
+    let count=0, last=0;
+    const cheat=async()=>{
+      if(finished.current) return;
+      const now=Date.now(); if(now-last<800) return; last=now;
+      count+=1; setCheatCount(count);
+      try{await api.post("/exam/log-cheat",{exam_id:id,event_type:"tab_switch"});}catch{}
+      if(count>=3) submit("cheat");
     };
-    const onVis = () => { if (document.hidden) detect(); };
-    const onBlur = () => detect();
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("blur", onBlur);
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("blur", onBlur);
-    };
-  }, [loading]);
+    const onVis=()=>{ if(document.hidden) cheat(); };
+    const onBlur=()=>cheat();
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("blur",onBlur);
+    return()=>{ document.removeEventListener("visibilitychange",onVis); window.removeEventListener("blur",onBlur); };
+  },[loading]);
 
-  // Disable copy/paste
-  useEffect(() => {
-    const onKey = e => {
-      if ((e.ctrlKey || e.metaKey) && ["c","v","x","a"].includes(e.key.toLowerCase())) e.preventDefault();
-    };
-    const noCtx = e => e.preventDefault();
-    const noSel = e => e.preventDefault();
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("contextmenu", noCtx);
-    document.addEventListener("selectstart", noSel);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("contextmenu", noCtx);
-      document.removeEventListener("selectstart", noSel);
-    };
-  }, []);
+  useEffect(()=>{
+    const onKey=e=>{ if((e.ctrlKey||e.metaKey)&&["c","v","x","a"].includes(e.key.toLowerCase())) e.preventDefault(); };
+    const onCtx=e=>e.preventDefault();
+    const onSel=e=>e.preventDefault();
+    document.addEventListener("keydown",onKey);
+    document.addEventListener("contextmenu",onCtx);
+    document.addEventListener("selectstart",onSel);
+    return()=>{ document.removeEventListener("keydown",onKey); document.removeEventListener("contextmenu",onCtx); document.removeEventListener("selectstart",onSel); };
+  },[]);
 
-  const saveAnswer = async (qid, val, isText = false) => {
-    setAnswers(p => ({ ...p, [qid]: val }));
-    try {
-      await api.post("/exam/save-answer", {
-        exam_id: id, question_id: qid,
-        ...(isText ? { text_answer: val } : { selected_option: val }),
-      });
-    } catch {}
-  };
+  const answer=(qid,text)=>{ setAnswers(p=>({...p,[qid]:text})); api.post("/exam/save-answer",{exam_id:id,question_id:qid,selected_option:text}).catch(()=>{}); };
+  const answerText=(qid,text)=>{ setAnswers(p=>({...p,[qid]:text})); api.post("/exam/save-answer",{exam_id:id,question_id:qid,text_answer:text}).catch(()=>{}); };
 
-  const mins = Math.floor(timeLeft / 60);
-  const secs = timeLeft % 60;
-  const timerClass = timeLeft < 60 ? "timer" : timeLeft < 300 ? "timer warn" : "timer safe";
+  const mins=Math.floor(timeLeft/60), secs=timeLeft%60;
+  const timeColor=timeLeft<60?"#ef4444":timeLeft<300?"#f59e0b":"#059669";
+  const answered=Object.values(answers).filter(v=>v).length;
 
-  const answered = Object.keys(answers).filter(k => answers[k]).length;
-  const progress = questions.length ? (answered / questions.length) * 100 : 0;
-
-  if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 1 }}>
-      <div style={{ textAlign: "center" }}>
-        <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3, margin: "0 auto 16px" }} />
-        <p style={{ color: "var(--text-muted)" }}>Loading exam...</p>
+  if(loading) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{textAlign:"center"}}>
+        <div className="spin spin-blue" style={{width:32,height:32,marginBottom:"0.9rem"}}/>
+        <p style={{color:"#64748b"}}>Loading exam...</p>
       </div>
     </div>
   );
 
   return (
-    <div style={{ position: "relative", zIndex: 1, userSelect: "none" }}>
+    <div className="page" style={{userSelect:"none"}}>
       {/* Sticky header */}
-      <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(15,12,41,0.9)", backdropFilter: "blur(20px)", borderBottom: "1px solid var(--glass-border)", padding: "12px 24px" }}>
-        <div style={{ maxWidth: 800, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16 }}>Online Examination</div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{answered}/{questions.length} answered</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Time Remaining</div>
-            <div className={timerClass} style={{ fontSize: "1.6rem" }}>
-              {mins}:{secs < 10 ? `0${secs}` : secs}
-            </div>
-          </div>
+      <div style={{position:"sticky",top:0,zIndex:50,
+        background:"rgba(238,243,251,0.88)",backdropFilter:"blur(18px)",
+        borderBottom:"1px solid rgba(59,126,248,0.1)",
+        padding:"0.85rem 1.25rem",marginBottom:"1.25rem",
+        display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"0.65rem",
+        marginLeft:"-1.5rem",marginRight:"-1.5rem"}}>
+        <div>
+          <p style={{fontWeight:700,color:"#0f172a",fontSize:"1rem"}}>Online Examination</p>
+          <p style={{color:"#64748b",fontSize:"0.78rem",marginTop:"0.1rem"}}>
+            {answered}/{questions.length} answered
+            {cheatCount>0&&<span style={{color:"#f59e0b",marginLeft:"0.6rem"}}>⚠️ {cheatCount}/3 warnings</span>}
+          </p>
         </div>
-        <div style={{ maxWidth: 800, margin: "8px auto 0" }}>
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:"0.68rem",color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.05em"}}>Time Left</div>
+          <div style={{fontWeight:800,fontSize:"1.5rem",color:timeColor,letterSpacing:"-0.02em",lineHeight:1}}>
+            {String(mins).padStart(2,"0")}:{String(secs).padStart(2,"0")}
           </div>
         </div>
       </div>
 
-      {/* Cheat warning */}
-      {cheatCount > 0 && (
-        <div style={{ background: "rgba(248,113,113,0.15)", borderBottom: "1px solid rgba(248,113,113,0.3)", padding: "10px 24px", textAlign: "center", fontSize: 13, color: "var(--danger)" }}>
-          ⚠️ Tab switch warning: {cheatCount}/3 — exam auto-submits at 3
-        </div>
-      )}
-
-      {/* Questions */}
-      <div className="page">
-        <div className="container-md">
-          {questions.map((q, i) => (
-            <div key={q.question_id} className="glass anim-fade-up" style={{ padding: "24px", marginBottom: 16 }}>
-              <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-                <span className="badge badge-purple" style={{ flexShrink: 0 }}>Q{i + 1}</span>
-                <p style={{ fontWeight: 500, lineHeight: 1.5 }}>{q.question_text}</p>
-              </div>
-
-              {(q.question_type || "").toLowerCase() === "mcq" ? (
-                ["a","b","c","d"].map(opt => {
-                  const text = q[`option_${opt}`];
-                  if (!text) return null;
-                  return (
-                    <button key={opt} className={`option-btn ${answers[q.question_id] === text ? "selected" : ""}`}
-                      onClick={() => saveAnswer(q.question_id, text)}>
-                      <span style={{ fontWeight: 600, marginRight: 8, opacity: 0.6 }}>{opt.toUpperCase()}.</span>
-                      {text}
-                    </button>
-                  );
-                })
-              ) : (
-                <textarea className="input" rows={5} placeholder="Write your answer here..."
-                  value={answers[q.question_id] || ""}
-                  onChange={e => saveAnswer(q.question_id, e.target.value, true)} />
+      <div className="wrap-md" style={{width:"100%"}}>
+        {questions.map((q,i)=>{
+          const type=(q.question_type||"").toLowerCase();
+          return (
+            <motion.div key={q.question_id} className="glass" style={{padding:"1.35rem",marginBottom:"1rem"}}
+              initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} transition={{delay:i*0.04}}>
+              <p style={{fontWeight:600,marginBottom:"0.9rem",lineHeight:1.6,color:"#0f172a",fontSize:"0.92rem"}}>
+                <span className="badge badge-blue" style={{marginRight:"0.5rem"}}>{i+1}</span>
+                {q.question_text}
+              </p>
+              {type==="mcq"&&(
+                <div style={{display:"flex",flexDirection:"column",gap:"0.45rem"}}>
+                  {["A","B","C","D"].map(opt=>{
+                    const text=q[`option_${opt.toLowerCase()}`]; if(!text) return null;
+                    const sel=answers[q.question_id]===text;
+                    return (
+                      <button key={opt} onClick={()=>answer(q.question_id,text)}
+                        style={{background:sel?"#dbeafe":"rgba(255,255,255,0.7)",
+                          border:sel?"1.5px solid #3b7ef8":"1.5px solid rgba(59,126,248,0.15)",
+                          borderRadius:"var(--r-sm)",padding:"0.72rem 1rem",
+                          color:sel?"#1d4ed8":"#475569",textAlign:"left",cursor:"pointer",
+                          transition:"all 0.14s",fontSize:"0.88rem",fontWeight:sel?600:400}}>
+                        <span style={{opacity:0.5,marginRight:"0.5rem",fontWeight:700}}>{opt}.</span>{text}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            </div>
-          ))}
+              {type==="descriptive"&&(
+                <textarea className="input" rows={4} placeholder="Write your answer here..."
+                  value={answers[q.question_id]||""}
+                  onChange={e=>answerText(q.question_id,e.target.value)}
+                  style={{userSelect:"text"}}/>
+              )}
+            </motion.div>
+          );
+        })}
 
-          <div style={{ textAlign: "center", paddingTop: 16, paddingBottom: 48 }}>
-            <button className="btn btn-success btn-lg"
-              onClick={() => { if (window.confirm("Submit exam? You cannot change answers after submitting.")) autoSubmit(); }}>
-              ✓ Submit Exam
-            </button>
-            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 10 }}>
-              {questions.length - answered} question{questions.length - answered !== 1 ? "s" : ""} unanswered
-            </p>
-          </div>
+        <div style={{textAlign:"center",padding:"1.75rem 0"}}>
+          <button className="btn btn-success btn-lg" disabled={submitting}
+            onClick={()=>{ if(window.confirm(`Submit? ${answered}/${questions.length} answered.`)) submit("manual"); }}>
+            {submitting?<><span className="spin"/>Submitting...</>:"✅ Submit Exam"}
+          </button>
+          <p style={{color:"#94a3b8",fontSize:"0.78rem",marginTop:"0.6rem"}}>
+            {questions.length-answered} question(s) unanswered
+          </p>
         </div>
       </div>
     </div>
