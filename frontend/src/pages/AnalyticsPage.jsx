@@ -1,120 +1,108 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import api from "../api/axios";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { motion } from "framer-motion";
+import api from "../api/axios";
+
+const TT = ({active,payload,label}) => !active||!payload?.length ? null : (
+  <div style={{background:"rgba(255,255,255,0.95)",border:"1px solid #bfdbfe",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.82rem"}}>
+    <p style={{color:"#64748b",marginBottom:"0.2rem"}}>{label}</p>
+    <p style={{color:"#2563eb",fontWeight:700}}>{payload[0].value}</p>
+  </div>
+);
 
 export default function AnalyticsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [data, setData] = useState([]);
+  const [data, setData]     = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api.get(`/exam/results/${id}`)
-      .then(res => setData(Array.isArray(res.data) ? res.data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [id]);
+  useEffect(()=>{
+    api.get(`/exam/results/${id}`).then(r=>setData(Array.isArray(r.data)?r.data:[])).catch(()=>{}).finally(()=>setLoading(false));
+  },[id]);
 
-  const scoreData = data.map(d => ({ name: d.name?.split(" ")[0] || "?", score: Number(d.score) || 0 }));
-  const passCount = data.filter(d => Number(d.score) >= Number(d.total_marks) * 0.4).length;
-  const pieData = [{ name: "Pass", value: passCount }, { name: "Fail", value: data.length - passCount }];
-  const avg = data.length ? (data.reduce((s, d) => s + Number(d.score), 0) / data.length).toFixed(1) : 0;
+  const scoreData = data.map(d=>({name:d.name?.split(" ")[0]||"?",score:Number(d.score)||0}));
+  const passCount = data.filter(d=>Number(d.score)>=(Number(d.total_marks)*0.4)).length;
+  const pieData   = [{name:"Pass",value:passCount},{name:"Fail",value:data.length-passCount}];
+  const avg       = data.length?(data.reduce((s,d)=>s+Number(d.score),0)/data.length).toFixed(1):0;
+  const max       = data.length?Math.max(...data.map(d=>Number(d.score))):0;
+  const cheats    = data.reduce((s,d)=>s+(d.cheat_count||0),0);
 
-  const tooltipStyle = { background: "rgba(15,12,41,0.95)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, color: "#f0eeff" };
-
-  if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, position: "relative" }}>
-      <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3 }} />
-    </div>
-  );
+  if(loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spin spin-blue" style={{width:32,height:32}}/></div>;
 
   return (
-    <div style={{ position: "relative", zIndex: 1 }}>
-      <nav className="navbar">
-        <span className="nav-logo">SmartExam AI</span>
-        <button className="btn btn-secondary btn-sm" onClick={() => navigate("/dashboard")}>← Dashboard</button>
-      </nav>
-      <div className="page">
-        <div className="container">
-          <h2 style={{ marginBottom: 24 }} className="anim-fade-up">Exam Analytics</h2>
-
-          {/* Stats */}
-          <div className="grid-4 anim-fade-up anim-delay-1" style={{ marginBottom: 28 }}>
-            {[
-              { label: "Students", value: data.length },
-              { label: "Average Score", value: avg },
-              { label: "Passed", value: passCount },
-              { label: "Pass Rate", value: data.length ? `${Math.round(passCount/data.length*100)}%` : "0%" },
-            ].map((s, i) => (
-              <div key={i} className="glass stat-card">
-                <div className="stat-value">{s.value}</div>
-                <div className="stat-label">{s.label}</div>
-              </div>
-            ))}
+    <div className="page">
+      <div className="wrap">
+        <motion.div initial={{opacity:0,y:-16}} animate={{opacity:1,y:0}}
+          style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.5rem",flexWrap:"wrap",gap:"0.75rem"}}>
+          <div>
+            <h1 style={{fontWeight:800,fontSize:"1.6rem",letterSpacing:"-0.03em",color:"#0f172a"}}>Analytics</h1>
+            <p style={{color:"#64748b",fontSize:"0.85rem",marginTop:"0.2rem"}}>{data.length} student(s)</p>
           </div>
+          <button className="btn btn-secondary" onClick={()=>navigate("/dashboard")}>← Dashboard</button>
+        </motion.div>
 
-          {/* Charts */}
-          <div className="grid-2 anim-fade-up anim-delay-2" style={{ marginBottom: 28 }}>
-            <div className="glass" style={{ padding: "24px" }}>
-              <h3 style={{ marginBottom: 16, fontSize: "1rem" }}>Score Distribution</h3>
-              {data.length === 0 ? <div className="empty-state"><div className="empty-state-icon">📊</div><div>No data yet</div></div> : (
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={scoreData}>
-                    <XAxis dataKey="name" tick={{ fill: "rgba(240,238,255,0.5)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "rgba(240,238,255,0.5)", fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(167,139,250,0.1)" }} />
-                    <Bar dataKey="score" fill="url(#barGrad)" radius={[4,4,0,0]} />
-                    <defs>
-                      <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#a78bfa" />
-                        <stop offset="100%" stopColor="#6366f1" />
-                      </linearGradient>
-                    </defs>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:"0.85rem",marginBottom:"1.25rem"}}>
+          {[{v:data.length,l:"Students",c:"#3b7ef8"},{v:avg,l:"Avg Score",c:"#059669"},{v:max,l:"Highest",c:"#7c3aed"},{v:cheats,l:"Cheat Events",c:"#dc2626"}].map((s,i)=>(
+            <motion.div key={i} className="glass" style={{padding:"1.15rem",textAlign:"center"}}
+              initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*0.07}}>
+              <div style={{fontWeight:800,fontSize:"1.65rem",color:s.c,letterSpacing:"-0.04em"}}>{s.v}</div>
+              <div style={{color:"#64748b",fontSize:"0.76rem",marginTop:"0.15rem",fontWeight:500}}>{s.l}</div>
+            </motion.div>
+          ))}
+        </div>
+
+        {data.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"1rem",marginBottom:"1.25rem"}}>
+            <div className="glass" style={{padding:"1.4rem"}}>
+              <h3 style={{fontWeight:700,fontSize:"0.88rem",marginBottom:"0.9rem",color:"#0f172a"}}>Student Scores</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={scoreData}>
+                  <XAxis dataKey="name" tick={{fill:"#94a3b8",fontSize:11}} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fill:"#94a3b8",fontSize:11}} axisLine={false} tickLine={false}/>
+                  <Tooltip content={<TT/>}/>
+                  <Bar dataKey="score" fill="#3b7ef8" radius={[5,5,0,0]}/>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <div className="glass" style={{ padding: "24px" }}>
-              <h3 style={{ marginBottom: 16, fontSize: "1rem" }}>Pass vs Fail</h3>
-              {data.length === 0 ? <div className="empty-state"><div className="empty-state-icon">🥧</div><div>No data yet</div></div> : (
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" outerRadius={90} innerRadius={40} paddingAngle={4} label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
-                      <Cell fill="#34d399" /><Cell fill="#f87171" />
-                    </Pie>
-                    <Tooltip contentStyle={tooltipStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
+            <div className="glass" style={{padding:"1.4rem"}}>
+              <h3 style={{fontWeight:700,fontSize:"0.88rem",marginBottom:"0.9rem",color:"#0f172a"}}>Pass vs Fail</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" outerRadius={75} label={({name,value})=>`${name}: ${value}`} labelLine={false}>
+                    {pieData.map((_,i)=><Cell key={i} fill={i===0?"#10b981":"#ef4444"}/>)}
+                  </Pie>
+                  <Tooltip contentStyle={{background:"rgba(255,255,255,0.95)",border:"1px solid #bfdbfe",borderRadius:8}}/>
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           </div>
+        )}
 
-          {/* Table */}
-          <div className="glass anim-fade-up anim-delay-3" style={{ overflow: "hidden" }}>
-            <div style={{ padding: "20px 24px 0" }}><h3>Detailed Results</h3></div>
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Student</th><th>Score</th><th>Total</th><th>%</th><th>Status</th><th>Cheats</th></tr></thead>
-                <tbody>
-                  {data.length === 0 ? (
-                    <tr><td colSpan={6}><div className="empty-state"><div className="empty-state-icon">📋</div><div>No data</div></div></td></tr>
-                  ) : data.map((d, i) => {
-                    const pct = d.total_marks ? Math.round(Number(d.score)/Number(d.total_marks)*100) : 0;
-                    return (
-                      <tr key={i}>
-                        <td>{d.name}</td>
-                        <td>{d.score}</td>
-                        <td>{d.total_marks}</td>
-                        <td>{pct}%</td>
-                        <td><span className={`badge ${pct >= 40 ? "badge-success" : "badge-danger"}`}>{pct >= 40 ? "Pass" : "Fail"}</span></td>
-                        <td>{d.cheat_count > 0 ? <span className="badge badge-danger">⚠️ {d.cheat_count}</span> : <span style={{ color: "var(--text-muted)" }}>—</span>}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+        <div className="glass" style={{padding:"1.4rem"}}>
+          <h3 style={{fontWeight:700,fontSize:"0.88rem",marginBottom:"0.9rem",color:"#0f172a"}}>Detailed Results</h3>
+          <div className="tbl-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Score</th><th>Total</th><th>%</th><th>Status</th><th>Cheats</th></tr></thead>
+              <tbody>
+                {data.length===0?(
+                  <tr><td colSpan={6} style={{textAlign:"center",color:"#94a3b8",padding:"2rem"}}>No results</td></tr>
+                ):data.map((d,i)=>{
+                  const pct=Math.round((Number(d.score)/Number(d.total_marks))*100)||0;
+                  const pass=pct>=40;
+                  return (
+                    <tr key={i}>
+                      <td style={{fontWeight:600}}>{d.name}</td>
+                      <td style={{color:"#3b7ef8",fontWeight:700}}>{d.score}</td>
+                      <td style={{color:"#64748b"}}>{d.total_marks}</td>
+                      <td style={{color:"#64748b"}}>{pct}%</td>
+                      <td><span className={`badge ${pass?"badge-green":"badge-red"}`}>{pass?"Pass":"Fail"}</span></td>
+                      <td>{d.cheat_count>0?<span className="badge badge-red">⚠️ {d.cheat_count}</span>:<span style={{color:"#94a3b8"}}>—</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
