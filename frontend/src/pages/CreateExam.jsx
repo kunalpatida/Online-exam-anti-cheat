@@ -1,117 +1,79 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import { useToast } from "../components/Toast";
 
 export default function CreateExam() {
-
   const navigate = useNavigate();
-
-  const [title, setTitle] = useState("");
-  const [duration, setDuration] = useState(30);
-  const [marks, setMarks] = useState(10);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const toast = useToast();
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({ title: "", duration: 30, marks: 10, startTime: "", endTime: "" });
+  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
 
   const handleCreate = async (e) => {
-
     e.preventDefault();
-
+    if (!form.title.trim()) return toast("Enter exam title", "error");
+    setLoading(true);
     try {
-
-      const response = await api.post("/exam/create", {
-        title: title,
-        duration_minutes: duration,
-        total_marks: marks,
-        start_time: startTime || null,
-        end_time: endTime || null
+      const res = await api.post("/exam/create", {
+        title: form.title,
+        duration_minutes: Number(form.duration),
+        total_marks: Number(form.marks),
+        start_time: form.startTime || null,
+        end_time: form.endTime || null,
       });
+      toast(`Exam created! Code: ${res.data.exam_code}`, "success");
+      navigate(`/exam-builder/${res.data.exam_code}`);
+    } catch (err) {
+      toast(err.response?.data?.error || "Failed to create exam", "error");
+    } finally { setLoading(false); }
+  };
 
-      const code = response.data.exam_code;
-
-      alert(`Exam created!\nExam Code: ${response.data.exam_code}`);
-
-      navigate(`/exam-builder/${response.data.exam_code}`);
-
-    } catch (error) {
-
-        console.error("CREATE EXAM ERROR:", error);
-
-        if (error.response) {
-            alert(error.response.data.error || JSON.stringify(error.response.data));
-        } else {
-            alert("Server not reachable");
-        }
-
-    }
-
-    };
-
-    return (
-
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-100">
-
-      <div className="bg-white p-10 rounded-xl shadow-lg w-full max-w-lg">
-
-        <h1 className="text-2xl font-bold mb-6 text-center">
-          Create Exam
-        </h1>
-
-        <form onSubmit={handleCreate} className="space-y-4">
-
-          <input
-            type="text"
-            placeholder="Exam Title"
-            value={title}
-            onChange={(e)=>setTitle(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <input
-            type="number"
-            placeholder="Duration (minutes)"
-            value={duration}
-            onChange={(e)=>setDuration(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-          />
-
-          <input
-            type="number"
-            placeholder="Total Marks"
-            value={marks}
-            onChange={(e)=>setMarks(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-          />
-
-          <label className="text-sm text-gray-600">Start Time</label>
-          <input
-            type="datetime-local"
-            value={startTime}
-            onChange={(e)=>setStartTime(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-          />
-
-          <label className="text-sm text-gray-600">End Time</label>
-          <input
-            type="datetime-local"
-            value={endTime}
-            onChange={(e)=>setEndTime(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-          />
-
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"
-          >
-            Create Exam
+  return (
+    <div className="auth-page">
+      <div className="auth-card glass-strong anim-scale-in" style={{ maxWidth: 520 }}>
+        <div style={{ marginBottom: 28 }}>
+          <button onClick={() => navigate("/dashboard")}
+            style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13, padding: 0, marginBottom: 16 }}>
+            ← Back to Dashboard
           </button>
+          <h2 style={{ fontSize: "1.5rem", marginBottom: 4 }}>Create New Exam</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Fill in the details to get started</p>
+        </div>
 
+        <form onSubmit={handleCreate}>
+          <div className="input-group">
+            <label className="input-label">Exam Title *</label>
+            <input className="input" placeholder="e.g. Physics Mid-Term 2024"
+              value={form.title} onChange={set("title")} required />
+          </div>
+          <div className="grid-2" style={{ gap: 12, marginBottom: 16 }}>
+            <div>
+              <label className="input-label">Duration (minutes)</label>
+              <input className="input" type="number" min="1"
+                value={form.duration} onChange={set("duration")} />
+            </div>
+            <div>
+              <label className="input-label">Total Marks</label>
+              <input className="input" type="number" min="1"
+                value={form.marks} onChange={set("marks")} />
+            </div>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Start Time (optional)</label>
+            <input className="input" type="datetime-local"
+              value={form.startTime} onChange={set("startTime")} />
+          </div>
+          <div className="input-group" style={{ marginBottom: 24 }}>
+            <label className="input-label">End Time (optional)</label>
+            <input className="input" type="datetime-local"
+              value={form.endTime} onChange={set("endTime")} />
+          </div>
+          <button type="submit" className="btn btn-primary btn-lg btn-full" disabled={loading}>
+            {loading ? <><span className="spinner" /> Creating...</> : "Create Exam & Add Questions →"}
+          </button>
         </form>
-
       </div>
-
     </div>
-
   );
-
 }
