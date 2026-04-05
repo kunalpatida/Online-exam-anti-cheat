@@ -1,105 +1,54 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import api from "../api/axios";
 
 export default function ProfilePage() {
-
   const [data, setData] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.get("/exam/profile")
-      .then(res => setData(res.data))
-      .catch(err => {
-        console.error(err);
-        alert("Failed to load profile");
-      });
+    api.get("/exam/profile").then(res => setData(res.data)).catch(() => navigate("/login"));
   }, []);
 
-  // Logout function
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/");
-  };
+  const logout = () => { localStorage.removeItem("token"); navigate("/"); };
 
-  if (!data) {
-    return (
-      <div className="h-screen flex justify-center items-center text-xl">
-        Loading profile...
-      </div>
-    );
-  }
+  if (!data) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, position: "relative" }}>
+      <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3 }} />
+    </div>
+  );
 
   return (
+    <div style={{ position: "relative", zIndex: 1 }}>
+      <nav className="navbar">
+        <span className="nav-logo">SmartExam AI</span>
+        <button className="btn btn-secondary btn-sm" onClick={() => navigate("/dashboard")}>← Dashboard</button>
+      </nav>
+      <div className="auth-page">
+        <div className="auth-card glass-strong anim-scale-in" style={{ textAlign: "center" }}>
+          <div className="avatar avatar-lg" style={{ margin: "0 auto 16px" }}>
+            {data.user.name?.charAt(0).toUpperCase()}
+          </div>
+          <h2 style={{ marginBottom: 4 }}>{data.user.name}</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: 14, marginBottom: 28 }}>{data.user.email}</p>
 
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 flex items-center justify-center p-6">
-
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white shadow-xl rounded-2xl p-10 w-full max-w-md text-center"
-      >
-
-        {/* Avatar */}
-        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold shadow">
-          {data.user.name.charAt(0).toUpperCase()}
-        </div>
-
-        {/* Name */}
-        <h2 className="text-2xl font-bold text-gray-800">
-          {data.user.name}
-        </h2>
-
-        {/* Email */}
-        <p className="text-gray-500 mb-6">
-          {data.user.email}
-        </p>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-
-          <div className="bg-blue-50 p-4 rounded-xl">
-            <p className="text-xl font-bold text-blue-600">
-              {data.created}
-            </p>
-            <p className="text-sm text-gray-600">
-              Exams Created
-            </p>
+          <div className="grid-2" style={{ marginBottom: 28 }}>
+            <div className="glass stat-card">
+              <div className="stat-value">{data.created}</div>
+              <div className="stat-label">Exams Created</div>
+            </div>
+            <div className="glass stat-card">
+              <div className="stat-value">{data.attempted}</div>
+              <div className="stat-label">Exams Taken</div>
+            </div>
           </div>
 
-          <div className="bg-green-50 p-4 rounded-xl">
-            <p className="text-xl font-bold text-green-600">
-              {data.attempted}
-            </p>
-            <p className="text-sm text-gray-600">
-              Exams Attempted
-            </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button className="btn btn-secondary btn-full" onClick={() => navigate("/dashboard")}>Back to Dashboard</button>
+            <button className="btn btn-danger btn-full" onClick={logout}>Sign Out</button>
           </div>
-
         </div>
-
-        {/* Buttons */}
-        <div className="flex flex-col gap-3">
-
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="bg-gray-200 py-2 rounded-lg hover:bg-gray-300 transition"
-          >
-            Back to Dashboard
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition"
-          >
-            Logout
-          </button>
-
-        </div>
-
-      </motion.div>
-
+      </div>
     </div>
   );
 }
