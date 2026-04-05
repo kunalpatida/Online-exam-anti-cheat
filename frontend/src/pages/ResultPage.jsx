@@ -1,252 +1,139 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { useParams, useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import { useToast } from "../components/Toast";
 
 export default function ResultPage() {
-
   const { id } = useParams();
-
+  const navigate = useNavigate();
+  const toast = useToast();
   const [results, setResults] = useState([]);
   const [answers, setAnswers] = useState([]);
   const [marks, setMarks] = useState({});
   const [evaluated, setEvaluated] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  // FETCH RESULTS
   useEffect(() => {
-    const fetchResults = async () => {
-      try {
-        const res = await api.get(`/exam/results/${id}`);
-        setResults(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchResults();
+    Promise.all([
+      api.get(`/exam/results/${id}`),
+      api.get(`/exam/answers/${id}`)
+    ]).then(([r, a]) => {
+      setResults(Array.isArray(r.data) ? r.data : []);
+      setAnswers(Array.isArray(a.data) ? a.data : []);
+    }).catch(() => toast("Failed to load results", "error"))
+    .finally(() => setLoading(false));
   }, [id]);
 
-  // FETCH ANSWERS
-  useEffect(() => {
-    const fetchAnswers = async () => {
-      try {
-        const res = await api.get(`/exam/answers/${id}`);
-        setAnswers(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error("Failed to load answers");
-      }
-    };
-    fetchAnswers();
-  }, [id]);
+  const maxPerQ = results.length > 0
+    ? results[0].total_marks / Math.max(answers.length + (results[0]?.mcq_count || 1), 1)
+    : 0;
 
-  // 🔥 CALCULATE MAX MARKS PER QUESTION
-  const maxMarks =
-    results.length > 0
-      ? results[0].total_marks / (answers.length || 1)
-      : 0;
+  const submitEval = async (a, isEdit = false) => {
+    const val = marks[a.question_id];
+    if (!val && val !== 0) return;
+    try {
+      await api.post("/exam/evaluate", {
+        user_id: a.user_id, exam_id: id, question_id: a.question_id, marks: val
+      });
+      setEvaluated(p => ({ ...p, [a.question_id]: !isEdit, [`edit_${a.question_id}`]: false }));
+      toast("Marks saved!", "success");
+    } catch (err) {
+      toast(err.response?.data?.error || "Failed to save", "error");
+    }
+  };
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1, position: "relative" }}>
+      <div className="spinner" style={{ width: 40, height: 40, borderWidth: 3 }} />
+    </div>
+  );
 
   return (
+    <div style={{ position: "relative", zIndex: 1 }}>
+      <nav className="navbar">
+        <span className="nav-logo">SmartExam AI</span>
+        <button className="btn btn-secondary btn-sm" onClick={() => navigate("/dashboard")}>← Dashboard</button>
+      </nav>
+      <div className="page">
+        <div className="container">
+          <h2 style={{ marginBottom: 24 }} className="anim-fade-up">Exam Results</h2>
 
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-10">
+          {/* Results list */}
+          <div style={{ marginBottom: 32 }}>
+            {results.length === 0 ? (
+              <div className="glass"><div className="empty-state"><div className="empty-state-icon">📊</div><div>No submissions yet</div></div></div>
+            ) : results.map((r, i) => {
+              const pct = r.total_marks ? Math.round((r.score / r.total_marks) * 100) : 0;
+              const pass = pct >= 40;
+              return (
+                <div key={i} className="glass anim-fade-up" style={{ padding: "20px 24px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{r.name}</div>
+                    <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{r.email}</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, color: "var(--purple)" }}>
+                      {r.score} <span style={{ fontSize: 14, opacity: 0.5 }}>/ {r.total_marks}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{pct}%</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className={`badge ${pass ? "badge-success" : "badge-danger"}`}>{pass ? "Pass" : "Fail"}</span>
+                    {r.evaluation_status === "PENDING" && <span className="badge badge-warning">Pending Eval</span>}
+                    {r.cheat_count > 0 && <span className="badge badge-danger">⚠️ {r.cheat_count} cheats</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-      <motion.h1
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-3xl font-bold text-center mb-10"
-      >
-        Exam Results
-      </motion.h1>
-
-      {/* RESULTS */}
-      <div className="max-w-6xl mx-auto grid gap-6">
-
-        {results.map((r, index) => {
-
-          const percentage = r.total_marks
-            ? Math.round((r.score / r.total_marks) * 100)
-            : 0;
-
-          const status = percentage >= 40 ? "Pass" : "Fail";
-
-          return (
-
-            <div key={index} className="bg-white p-6 rounded-xl shadow flex justify-between">
-
-              <div>
-                <h2 className="font-semibold">{r.name}</h2>
-                <p className="text-gray-500 text-sm">{r.email}</p>
-              </div>
-
-              <div>
-                <p className="font-bold text-blue-600">
-                  {r.score} / {r.total_marks}
-                </p>
-                <p>{percentage}%</p>
-              </div>
-
-              <div>
-                <span className={`px-3 py-1 rounded ${
-                  status === "Pass"
-                    ? "bg-green-100 text-green-600"
-                    : "bg-red-100 text-red-600"
-                }`}>
-                  {status}
-                </span>
-              </div>
-
-              <div>
-                Cheat: {r.cheat_count}
-              </div>
-
+          {/* Descriptive evaluation */}
+          {answers.length > 0 && (
+            <div className="glass" style={{ padding: "24px" }}>
+              <h3 style={{ marginBottom: 20 }}>Descriptive Evaluation</h3>
+              {answers.map((a, i) => {
+                const val = marks[a.question_id] ?? "";
+                const maxQ = results.length > 0 ? results[0].total_marks / Math.max(
+                  (answers.length + (results[0]?.mcq_count || 0)), 1) : 10;
+                const invalid = Number(val) > maxQ;
+                const done = evaluated[a.question_id];
+                const editing = evaluated[`edit_${a.question_id}`];
+                return (
+                  <div key={i} style={{ borderBottom: "1px solid var(--glass-border)", paddingBottom: 20, marginBottom: 20 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{a.name}</div>
+                    <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>{a.question_text}</div>
+                    <div className="glass" style={{ padding: "12px 16px", marginBottom: 12, fontSize: 14, lineHeight: 1.6, background: "rgba(255,255,255,0.03)" }}>
+                      {a.text_answer || <em style={{ color: "var(--text-muted)" }}>No answer provided</em>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <input type="number" className="input" min="0" placeholder={`Max ${maxQ.toFixed(1)}`}
+                        style={{ width: 100, borderColor: invalid ? "var(--danger)" : undefined }}
+                        value={val} disabled={done && !editing}
+                        onChange={e => setMarks(p => ({ ...p, [a.question_id]: Number(e.target.value) }))} />
+                      {invalid && <span style={{ fontSize: 12, color: "var(--danger)" }}>Max {maxQ.toFixed(1)}</span>}
+                      {!done && (
+                        <button className="btn btn-primary btn-sm" disabled={!val && val !== 0 || invalid}
+                          onClick={() => submitEval(a)}>Save Marks</button>
+                      )}
+                      {done && !editing && (
+                        <button className="btn btn-secondary btn-sm"
+                          onClick={() => setEvaluated(p => ({ ...p, [`edit_${a.question_id}`]: true }))}>
+                          Edit
+                        </button>
+                      )}
+                      {editing && (
+                        <button className="btn btn-success btn-sm" disabled={!val && val !== 0 || invalid}
+                          onClick={() => submitEval(a, true)}>Update</button>
+                      )}
+                      {done && !editing && <span className="badge badge-success">✓ Saved</span>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-
-          );
-
-        })}
-
+          )}
+        </div>
       </div>
-
-      {/* DESCRIPTIVE */}
-      <div className="max-w-6xl mx-auto mt-12 bg-white p-6 rounded-xl shadow">
-
-        <h2 className="text-xl font-bold mb-6">
-          Descriptive Evaluation
-        </h2>
-
-        {answers.length === 0 && (
-          <p>No descriptive answers found</p>
-        )}
-
-        {answers.map((a, index) => {
-
-          const value = marks[a.question_id] || "";
-          const isInvalid = value > maxMarks;
-
-          return (
-
-            <div key={index} className="mb-6 border-b pb-4">
-
-              <h3 className="font-semibold">{a.name}</h3>
-
-              <p className="mt-1">{a.question_text}</p>
-
-              <p className="text-gray-600 mt-1">
-                {a.text_answer}
-              </p>
-
-              {/* INPUT + BUTTON ROW */}
-              <div className="flex items-center gap-3 mt-3">
-
-                <input
-                  type="number"
-                  min="0"
-                  placeholder={`Max ${maxMarks}`}
-                  value={value}
-                  disabled={evaluated[a.question_id] && !evaluated[`edit_${a.question_id}`]}
-                  onChange={(e) => {
-
-                    const val = Number(e.target.value);
-
-                    setMarks(prev => ({
-                      ...prev,
-                      [a.question_id]: val
-                    }));
-
-                  }}
-                  className={`border p-2 rounded w-32 ${
-                    isInvalid ? "border-red-500" : ""
-                  }`}
-                />
-
-                {/* SUBMIT BUTTON */}
-                {!evaluated[a.question_id] && (
-                  <button
-                    disabled={!value || isInvalid}
-                    onClick={async () => {
-
-                      await api.post("/exam/evaluate", {
-                        user_id: a.user_id,
-                        exam_id: id,
-                        question_id: a.question_id,
-                        marks: value
-                      });
-
-                      setEvaluated(prev => ({
-                        ...prev,
-                        [a.question_id]: true
-                      }));
-
-                    }}
-                    className={`px-4 py-2 rounded text-white ${
-                      !value || isInvalid
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-blue-600 hover:bg-blue-700"
-                    }`}
-                  >
-                    Submit
-                  </button>
-                )}
-
-                {/* EDIT BUTTON */}
-                {evaluated[a.question_id] && !evaluated[`edit_${a.question_id}`] && (
-                  <button
-                    onClick={() =>
-                      setEvaluated(prev => ({
-                        ...prev,
-                        [`edit_${a.question_id}`]: true
-                      }))
-                    }
-                    className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                  >
-                    Edit
-                  </button>
-                )}
-
-                {/* SAVE BUTTON AFTER EDIT */}
-                {evaluated[`edit_${a.question_id}`] && (
-                  <button
-                    disabled={!value || isInvalid}
-                    onClick={async () => {
-
-                      await api.post("/exam/evaluate", {
-                        user_id: a.user_id,
-                        exam_id: id,
-                        question_id: a.question_id,
-                        marks: value
-                      });
-
-                      setEvaluated(prev => ({
-                        ...prev,
-                        [`edit_${a.question_id}`]: false
-                      }));
-
-                    }}
-                    className={`px-4 py-2 rounded text-white ${
-                      !value || isInvalid
-                        ? "bg-gray-400"
-                        : "bg-green-600 hover:bg-green-700"
-                    }`}
-                  >
-                    Save
-                  </button>
-                )}
-
-              </div>
-
-              {/* ERROR MESSAGE */}
-              {isInvalid && (
-                <p className="text-red-500 text-sm mt-1">
-                  Max allowed marks is {maxMarks}
-                </p>
-              )}
-
-            </div>
-
-          );
-
-        })}
-
-      </div>
-
     </div>
   );
 }
