@@ -58,28 +58,6 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Mock exam card */}
-        <motion.div className="glass" initial={{opacity:0,y:24,scale:0.97}} animate={{opacity:1,y:0,scale:1}}
-          transition={{delay:0.22,duration:0.55}}
-          style={{marginTop:"3rem",padding:"1.5rem",textAlign:"left",maxWidth:540,margin:"3rem auto 0"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.9rem"}}>
-            <span style={{fontWeight:700,fontSize:"0.88rem",color:"#0f172a"}}>📋 Physics — Chapter 5 Test</span>
-            <span className="badge badge-green">● Live</span>
-          </div>
-          {["Newton's First Law states that...", "The SI unit of force is...", "Which is a vector quantity?"].map((q,i)=>(
-            <div key={i} style={{
-              background:i===1?"rgba(59,126,248,0.07)":"rgba(255,255,255,0.6)",
-              border:i===1?"1.5px solid rgba(59,126,248,0.22)":"1px solid rgba(59,126,248,0.09)",
-              borderRadius:8,padding:"0.6rem 0.9rem",fontSize:"0.82rem",
-              color:i===1?"#2563eb":"#475569",fontWeight:i===1?600:400,marginBottom:"0.4rem"}}>
-              Q{i+1}. {q}
-            </div>
-          ))}
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:"0.75rem"}}>
-            <span style={{fontSize:"0.78rem",color:"#94a3b8"}}>⏱ 28:42 remaining</span>
-            <span style={{fontSize:"0.78rem",color:"#3b7ef8",fontWeight:600}}>3 / 10 answered</span>
-          </div>
-        </motion.div>
       </section>
 
       {/* Stats */}
