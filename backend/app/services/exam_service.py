@@ -7,20 +7,13 @@ import uuid
 from datetime import datetime, timedelta
 
 
-# ------------------------------------------------------------------
-# Generate a unique 6-character exam code (2 letters + 4 digits)
-# ------------------------------------------------------------------
 def generate_exam_code():
     letters = "".join(random.choices(string.ascii_uppercase, k=2))
     numbers = "".join(random.choices(string.digits, k=4))
     return f"{letters}{numbers}"
 
 
-# ------------------------------------------------------------------
-# Create exam shell in DB.
-# Only stores title, duration, marks, timing, and creator.
-# Questions are added separately after this.
-# ------------------------------------------------------------------
+# Returns both exam_code and exam_id so frontend can use exam_id directly
 def create_exam(title, duration_minutes, total_marks, admin_id, start_time=None, end_time=None):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -34,17 +27,14 @@ def create_exam(title, duration_minutes, total_marks, admin_id, start_time=None,
     """, (title, duration_minutes, total_marks, admin_id, exam_code, start_time, end_time))
 
     conn.commit()
+    exam_id = cursor.lastrowid
+
     cursor.close()
     conn.close()
 
-    return exam_code
+    return exam_code, exam_id
 
 
-# ------------------------------------------------------------------
-# Add a single question to an exam.
-# MCQ questions include four options and a correct option label.
-# Descriptive questions only need question_text.
-# ------------------------------------------------------------------
 def add_question(exam_id, question_text, option_a=None, option_b=None,
                  option_c=None, option_d=None, correct_option=None, question_type="MCQ"):
     conn = get_db_connection()
@@ -69,10 +59,6 @@ def add_question(exam_id, question_text, option_a=None, option_b=None,
     conn.close()
 
 
-# ------------------------------------------------------------------
-# Get all exams created by a specific teacher.
-# Includes attempt count per exam from results table.
-# ------------------------------------------------------------------
 def get_all_exams(user_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -99,11 +85,6 @@ def get_all_exams(user_id):
     return exams
 
 
-# ------------------------------------------------------------------
-# Get all questions for an exam (without correct_option exposed).
-# correct_option is kept in the result so shuffle logic can use it,
-# but it is NOT sent to the student frontend directly.
-# ------------------------------------------------------------------
 def get_questions_by_exam(exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -123,12 +104,6 @@ def get_questions_by_exam(exam_id):
     return questions
 
 
-# ------------------------------------------------------------------
-# Save or update a student answer.
-# MCQ answers use selected_option (the text of the chosen option).
-# Descriptive answers use text_answer.
-# Upsert logic: update if answer exists, insert if not.
-# ------------------------------------------------------------------
 def save_answer(user_id, exam_id, question_id, selected_option=None, text_answer=None):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -179,15 +154,6 @@ def save_answer(user_id, exam_id, question_id, selected_option=None, text_answer
     conn.close()
 
 
-# ------------------------------------------------------------------
-# Submit exam and calculate initial score.
-#
-# Marks logic:
-#   - marks_per_q = total_marks / total_questions  (all equal share)
-#   - MCQ: auto-graded if selected_option matches correct_option
-#   - Descriptive: score = 0 until teacher evaluates manually
-#   - evaluation_status = AUTO if all MCQ, PENDING if has descriptive
-# ------------------------------------------------------------------
 def submit_exam(user_id, exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -204,20 +170,17 @@ def submit_exam(user_id, exam_id):
 
     cursor.execute("""
         SELECT
-            q.question_id,
             q.question_type,
             q.correct_option,
             a.selected_option
         FROM questions q
         LEFT JOIN answers a
             ON q.question_id = a.question_id
-           AND a.user_id = %s
-           AND a.exam_id = %s
+           AND a.user_id = %s AND a.exam_id = %s
         WHERE q.exam_id = %s
     """, (user_id, exam_id, exam_id))
 
     questions = cursor.fetchall()
-
     mcq_score = 0.0
     has_descriptive = False
 
@@ -246,15 +209,9 @@ def submit_exam(user_id, exam_id):
     cursor.close()
     conn.close()
 
-    print(f"submit_exam: user={user_id} exam={exam_id} score={mcq_score}/{total_marks} status={eval_status}")
-
     return mcq_score, total_marks
 
 
-# ------------------------------------------------------------------
-# Log a cheat event (tab switch, window blur, etc.)
-# Returns total cheat count for this student in this exam.
-# ------------------------------------------------------------------
 def log_cheat_event(user_id, exam_id, event_type):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -270,7 +227,6 @@ def log_cheat_event(user_id, exam_id, event_type):
     """, (user_id, exam_id))
 
     count = cursor.fetchone()[0]
-
     conn.commit()
     cursor.close()
     conn.close()
@@ -278,10 +234,6 @@ def log_cheat_event(user_id, exam_id, event_type):
     return count
 
 
-# ------------------------------------------------------------------
-# Get all student results for a given exam (teacher view).
-# Includes name, email, score, total_marks, cheat count.
-# ------------------------------------------------------------------
 def get_exam_results(exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -313,12 +265,6 @@ def get_exam_results(exam_id):
     return results
 
 
-# ------------------------------------------------------------------
-# Start exam session on first load.
-# Inserts a result row with status IN_PROGRESS and records start time.
-# Returns session token for this attempt.
-# If already started, returns existing session token.
-# ------------------------------------------------------------------
 def start_exam_if_not_started(user_id, exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -347,10 +293,6 @@ def start_exam_if_not_started(user_id, exam_id):
     return existing["session_token"]
 
 
-# ------------------------------------------------------------------
-# Check if exam time is over for a student.
-# Compares current time against start_time + duration.
-# ------------------------------------------------------------------
 def is_exam_time_over(user_id, exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -373,10 +315,6 @@ def is_exam_time_over(user_id, exam_id):
     return datetime.now() > end_time
 
 
-# ------------------------------------------------------------------
-# Look up an exam by its code.
-# Returns exam metadata or None if not found.
-# ------------------------------------------------------------------
 def get_exam_by_code(exam_code):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -394,10 +332,6 @@ def get_exam_by_code(exam_code):
     return exam
 
 
-# ------------------------------------------------------------------
-# Check if a student has already attempted this exam.
-# Returns the result row (with status) or None.
-# ------------------------------------------------------------------
 def get_exam_attempt(user_id, exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -414,10 +348,6 @@ def get_exam_attempt(user_id, exam_id):
     return attempt
 
 
-# ------------------------------------------------------------------
-# Get all saved answers for a student in an exam.
-# Used to restore answers if the student refreshes the page.
-# ------------------------------------------------------------------
 def get_saved_answers(user_id, exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
