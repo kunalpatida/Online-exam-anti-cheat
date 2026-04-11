@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from datetime import datetime, timezone
 import random
 
 from database import get_db_connection
@@ -130,9 +131,9 @@ def list_exams():
 @jwt_required()
 def join_exam():
     user_id = int(get_jwt_identity())
-    data = request.json
+    data = request.json or {}
+    exam_code = (data.get("exam_code") or "").strip().upper()
 
-    exam_code = data.get("exam_code")
     if not exam_code:
         return jsonify({"error": "exam_code is required"}), 400
 
@@ -140,15 +141,26 @@ def join_exam():
     if not exam:
         return jsonify({"error": "Invalid exam code"}), 404
 
-    from datetime import datetime
-    start = exam.get("start_time")
-    end = exam.get("end_time")
+    # Use naive datetime for comparison since MySQL stores naive datetimes
     now = datetime.now()
+    start = exam.get("start_time")
+    end   = exam.get("end_time")
 
-    if start and now < start:
-        return jsonify({"error": "Exam has not started yet"}), 403
-    if end and now > end:
-        return jsonify({"error": "Exam window has closed"}), 403
+    # Convert to naive datetime if timezone-aware (safety check)
+    if start is not None:
+        if hasattr(start, "tzinfo") and start.tzinfo is not None:
+            start = start.replace(tzinfo=None)
+        if now < start:
+            diff_minutes = int((start - now).total_seconds() / 60)
+            return jsonify({
+                "error": f"Exam has not started yet. Starts in {diff_minutes} minute(s)"
+            }), 403
+
+    if end is not None:
+        if hasattr(end, "tzinfo") and end.tzinfo is not None:
+            end = end.replace(tzinfo=None)
+        if now > end:
+            return jsonify({"error": "Exam window has closed"}), 403
 
     attempt = get_exam_attempt(user_id, exam["exam_id"])
     if attempt and attempt["status"] == "SUBMITTED":
