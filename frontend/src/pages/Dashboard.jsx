@@ -36,7 +36,7 @@ export default function Dashboard() {
   if(loading) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{textAlign:"center"}}>
-        <div className="spin spin-blue" style={{width:32,height:32,marginBottom:"0.9rem"}}/>
+        <div className="spin spin-blue" style={{width:32,height:32,marginBottom:"0.3rem"}}/>
         <p style={{color:"#64748b",fontSize:"0.9rem"}}>Loading dashboard...</p>
       </div>
     </div>
@@ -58,7 +58,7 @@ export default function Dashboard() {
             <h1 style={{fontWeight:800,fontSize:"clamp(1.4rem,4vw,1.9rem)",letterSpacing:"-0.03em",color:"#0f172a"}}>
               Dashboard
             </h1>
-            <p style={{color:"#64748b",marginTop:"0.2rem",fontSize:"0.88rem"}}>
+            <p style={{color:"#64748b",marginTop:"0.2rem",fontSize:"0.33rem"}}>
               Welcome back, {user?.name||"User"} 👋
             </p>
           </div>
