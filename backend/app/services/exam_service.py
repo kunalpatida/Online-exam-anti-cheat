@@ -1,5 +1,4 @@
 from database import get_db_connection
-from app.services.ai_service import generate_wrong_options, generate_full_exam
 
 import random
 import string
@@ -13,70 +12,23 @@ def generate_exam_code():
     return f"{letters}{numbers}"
 
 
-# ------------------------------------------------------------------
-# CREATE EXAM WITH QUESTIONS IN ONE TRANSACTION
-# Exam is only committed to DB if at least one question is provided.
-# If anything fails, entire transaction is rolled back.
-# ------------------------------------------------------------------
-def create_exam_with_questions(title, duration_minutes, total_marks, admin_id,
-                                start_time, end_time, questions):
+def create_exam(title, duration_minutes, total_marks, admin_id, start_time=None, end_time=None):
     conn   = get_db_connection()
     cursor = conn.cursor()
+    exam_code = generate_exam_code()
 
-    try:
-        exam_code = generate_exam_code()
+    cursor.execute("""
+        INSERT INTO exams
+            (title, duration_minutes, total_marks, created_by, exam_code, start_time, end_time)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """, (title, duration_minutes, total_marks, admin_id, exam_code, start_time, end_time))
 
-        # Insert exam
-        cursor.execute("""
-            INSERT INTO exams
-                (title, duration_minutes, total_marks, created_by, exam_code, start_time, end_time)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (title, duration_minutes, total_marks, admin_id, exam_code, start_time, end_time))
-
-        exam_id = cursor.lastrowid
-
-        # Insert all questions in same transaction
-        for q in questions:
-            q_type = (q.get("question_type") or "MCQ").upper()
-
-            if q_type == "MCQ":
-                cursor.execute("""
-                    INSERT INTO questions
-                        (exam_id, question_text, option_a, option_b, option_c, option_d,
-                         correct_option, question_type)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    exam_id,
-                    q["question_text"],
-                    q.get("option_a"),
-                    q.get("option_b"),
-                    q.get("option_c"),
-                    q.get("option_d"),
-                    q.get("correct_option"),
-                    "MCQ",
-                ))
-            else:
-                cursor.execute("""
-                    INSERT INTO questions (exam_id, question_text, question_type)
-                    VALUES (%s, %s, %s)
-                """, (exam_id, q["question_text"], "DESCRIPTIVE"))
-
-        # Only commit if both exam and questions inserted successfully
-        conn.commit()
-        return exam_code, exam_id
-
-    except Exception:
-        conn.rollback()
-        raise
-
-    finally:
-        cursor.close()
-        conn.close()
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return exam_code
 
 
-# ------------------------------------------------------------------
-# ADD A SINGLE QUESTION to an existing exam
-# ------------------------------------------------------------------
 def add_question(exam_id, question_text, option_a=None, option_b=None,
                  option_c=None, option_d=None, correct_option=None, question_type="MCQ"):
     conn   = get_db_connection()
@@ -104,7 +56,6 @@ def add_question(exam_id, question_text, option_a=None, option_b=None,
 def get_all_exams(user_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
         SELECT e.exam_id, e.title, e.duration_minutes, e.total_marks, e.exam_code,
                COUNT(r.result_id) AS attempts
@@ -114,7 +65,6 @@ def get_all_exams(user_id):
         GROUP BY e.exam_id
         ORDER BY e.exam_id DESC
     """, (user_id,))
-
     exams = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -124,13 +74,12 @@ def get_all_exams(user_id):
 def get_questions_by_exam(exam_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
-        SELECT question_id, question_text, option_a, option_b, option_c, option_d,
+        SELECT question_id, question_text,
+               option_a, option_b, option_c, option_d,
                correct_option, question_type
         FROM questions WHERE exam_id = %s
     """, (exam_id,))
-
     questions = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -143,7 +92,6 @@ def save_answer(user_id, exam_id, question_id, selected_option=None, text_answer
 
     cursor.execute("SELECT question_type FROM questions WHERE question_id=%s", (question_id,))
     question = cursor.fetchone()
-
     if not question:
         cursor.close()
         conn.close()
@@ -152,8 +100,7 @@ def save_answer(user_id, exam_id, question_id, selected_option=None, text_answer
     q_type = question["question_type"].upper()
 
     cursor.execute("""
-        SELECT answer_id FROM answers
-        WHERE user_id=%s AND exam_id=%s AND question_id=%s
+        SELECT answer_id FROM answers WHERE user_id=%s AND exam_id=%s AND question_id=%s
     """, (user_id, exam_id, question_id))
     existing = cursor.fetchone()
 
@@ -185,6 +132,14 @@ def save_answer(user_id, exam_id, question_id, selected_option=None, text_answer
     conn.close()
 
 
+# ------------------------------------------------------------------
+# SUBMIT EXAM
+# selected_option is stored as TEXT (the option text the student chose)
+# correct_option in DB is stored as label (A/B/C/D) originally
+# BUT after shuffle in /questions route, correct_option sent to frontend
+# is now TEXT. So we compare selected_option (text) with the original
+# correct answer text fetched fresh from DB here.
+# ------------------------------------------------------------------
 def submit_exam(user_id, exam_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -194,15 +149,22 @@ def submit_exam(user_id, exam_id):
 
     cursor.execute("SELECT COUNT(*) as total_q FROM questions WHERE exam_id=%s", (exam_id,))
     total_q = cursor.fetchone()["total_q"]
-
     marks_per_q = round(total_marks / total_q, 4) if total_q else 0
 
+    # Fetch questions with their correct option LABEL and all option texts
+    # We need to resolve correct label to text for comparison with selected_option
     cursor.execute("""
-        SELECT q.question_type, q.correct_option, a.selected_option
+        SELECT
+            q.question_id,
+            q.question_type,
+            q.correct_option as correct_label,
+            q.option_a, q.option_b, q.option_c, q.option_d,
+            a.selected_option
         FROM questions q
-        LEFT JOIN answers a ON q.question_id = a.question_id
-            AND a.user_id=%s AND a.exam_id=%s
-        WHERE q.exam_id=%s
+        LEFT JOIN answers a
+            ON q.question_id = a.question_id
+           AND a.user_id = %s AND a.exam_id = %s
+        WHERE q.exam_id = %s
     """, (user_id, exam_id, exam_id))
 
     questions       = cursor.fetchall()
@@ -211,8 +173,22 @@ def submit_exam(user_id, exam_id):
 
     for q in questions:
         q_type = (q["question_type"] or "").lower()
+
         if q_type == "mcq":
-            if q["selected_option"] and q["selected_option"] == q["correct_option"]:
+            # Resolve correct label (A/B/C/D) to actual text
+            label_to_text = {
+                "A": q.get("option_a"),
+                "B": q.get("option_b"),
+                "C": q.get("option_c"),
+                "D": q.get("option_d"),
+            }
+            correct_label = (q.get("correct_label") or "").upper()
+            correct_text  = label_to_text.get(correct_label)
+
+            selected = q.get("selected_option")
+
+            # Compare selected text with correct text
+            if selected and correct_text and selected.strip() == correct_text.strip():
                 mcq_score += marks_per_q
         else:
             has_descriptive = True
@@ -221,16 +197,20 @@ def submit_exam(user_id, exam_id):
     eval_status = "PENDING" if has_descriptive else "AUTO"
 
     cursor.execute("""
-        INSERT INTO results (user_id, exam_id, score, total_marks, evaluation_status, status)
+        INSERT INTO results
+            (user_id, exam_id, score, total_marks, evaluation_status, status)
         VALUES (%s, %s, %s, %s, %s, 'SUBMITTED')
         ON DUPLICATE KEY UPDATE
-            score=VALUES(score), evaluation_status=VALUES(evaluation_status), status='SUBMITTED'
+            score=VALUES(score),
+            evaluation_status=VALUES(evaluation_status),
+            status='SUBMITTED'
     """, (user_id, exam_id, mcq_score, total_marks, eval_status))
 
     conn.commit()
     cursor.close()
     conn.close()
 
+    print(f"submit_exam: user={user_id} exam={exam_id} score={mcq_score}/{total_marks}")
     return mcq_score, total_marks
 
 
@@ -245,8 +225,8 @@ def log_cheat_event(user_id, exam_id, event_type):
     cursor.execute("""
         SELECT COUNT(*) FROM cheat_logs WHERE student_id=%s AND exam_id=%s
     """, (user_id, exam_id))
-
     count = cursor.fetchone()[0]
+
     conn.commit()
     cursor.close()
     conn.close()
@@ -256,7 +236,6 @@ def log_cheat_event(user_id, exam_id, event_type):
 def get_exam_results(exam_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
         SELECT u.name, u.email, r.score, r.evaluation_status, e.total_marks,
                COALESCE((
@@ -269,13 +248,13 @@ def get_exam_results(exam_id):
         JOIN exams e ON r.exam_id = e.exam_id
         WHERE r.exam_id = %s
     """, (exam_id,))
-
     results = cursor.fetchall()
     cursor.close()
     conn.close()
     return results
 
 
+# Timer starts only when student successfully reaches /questions page
 def start_exam_if_not_started(user_id, exam_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -306,13 +285,11 @@ def start_exam_if_not_started(user_id, exam_id):
 def is_exam_time_over(user_id, exam_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
         SELECT r.start_time, e.duration_minutes FROM results r
         JOIN exams e ON r.exam_id = e.exam_id
         WHERE r.user_id=%s AND r.exam_id=%s
     """, (user_id, exam_id))
-
     row = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -327,12 +304,10 @@ def is_exam_time_over(user_id, exam_id):
 def get_exam_by_code(exam_code):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
         SELECT exam_id, title, duration_minutes, total_marks, start_time, end_time
         FROM exams WHERE exam_code = %s
     """, (exam_code,))
-
     exam = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -342,11 +317,7 @@ def get_exam_by_code(exam_code):
 def get_exam_attempt(user_id, exam_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT status FROM results WHERE user_id=%s AND exam_id=%s
-    """, (user_id, exam_id))
-
+    cursor.execute("SELECT status FROM results WHERE user_id=%s AND exam_id=%s", (user_id, exam_id))
     attempt = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -356,13 +327,33 @@ def get_exam_attempt(user_id, exam_id):
 def get_saved_answers(user_id, exam_id):
     conn   = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("""
         SELECT question_id, selected_option, text_answer
         FROM answers WHERE user_id=%s AND exam_id=%s
     """, (user_id, exam_id))
-
     answers = cursor.fetchall()
     cursor.close()
     conn.close()
     return answers
+
+
+def add_ai_generated_question(exam_id, question_text, correct_answer):
+    from app.services.ai_service import generate_wrong_options
+    conn   = get_db_connection()
+    cursor = conn.cursor()
+
+    wrong_options = generate_wrong_options(question_text, correct_answer)
+    options       = [correct_answer] + wrong_options
+    random.shuffle(options)
+
+    cursor.execute("""
+        INSERT INTO questions
+            (exam_id, question_text, option_a, option_b, option_c, option_d,
+             correct_option, question_type)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'MCQ')
+    """, (exam_id, question_text, options[0], options[1], options[2], options[3], correct_answer))
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return {"question_text": question_text, "correct_answer": correct_answer, "wrong_options": wrong_options}
