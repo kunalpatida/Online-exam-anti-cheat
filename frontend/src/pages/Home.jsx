@@ -22,7 +22,7 @@ export default function Home() {
         </h2>
 
         <div style={{ display: "flex", gap: "1rem" }}>
-          <Link to="/login" style={linkStyle}>Login</Link>
+          <Link to="/login" style={primaryBtn}>Login</Link>
           <Link to="/register" style={primaryBtn}>Get Started</Link>
         </div>
       </nav>
