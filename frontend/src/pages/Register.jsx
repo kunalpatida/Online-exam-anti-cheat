@@ -1,120 +1,74 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import api from "../api/axios";
 
 export default function Register() {
-
   const navigate = useNavigate();
+  const [form, setForm] = useState({name:"",email:"",organization:"",password:""});
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [organization, setOrganization] = useState("");
-  const [password, setPassword] = useState("");
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
 
   const handleRegister = async (e) => {
-
-    e.preventDefault();
-
+    e.preventDefault(); setError(""); setLoading(true);
     try {
-
-      await api.post("/auth/register", {
-        name,
-        email,
-        password,
-        organization
-      });
-
-      alert("Registration successful. Please login.");
-
+      await api.post("/auth/register", form);
       navigate("/login");
-
-    } catch (error) {
-
-      alert("Registration failed");
-
-      console.error(error);
-
-    }
-
+    } catch (err) {
+      setError(err.response?.data?.error || "Registration failed");
+    } finally { setLoading(false); }
   };
 
+  const fields = [
+    {k:"name",         l:"Full Name",              t:"text",     p:"John Doe"},
+    {k:"email",        l:"Email",                  t:"email",    p:"you@example.com"},
+    {k:"organization", l:"College / Organization", t:"text",     p:"MIT University"},
+    {k:"password",     l:"Password",               t:"password", p:"••••••••"},
+  ];
+
   return (
+    <div className="page-center">
+      <motion.div className="wrap-sm" style={{width:"100%"}}
+        initial={{opacity:0,y:28}} animate={{opacity:1,y:0}} transition={{duration:0.42}}>
 
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-100">
+        <div style={{textAlign:"center",marginBottom:"1.75rem"}}>
+          <div style={{width:52,height:52,borderRadius:14,
+            background:"linear-gradient(135deg,#3b7ef8,#60a5fa)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:24,margin:"0 auto 0.9rem",
+            boxShadow:"0 6px 20px rgba(59,126,248,0.28)"}}>🎓</div>
+          <h1 style={{fontWeight:800,fontSize:"1.6rem",letterSpacing:"-0.03em",color:"#0f172a"}}>
+            Create account
+          </h1>
+          <p style={{color:"#64748b",marginTop:"0.3rem",fontSize:"0.88rem"}}>Join SmartExam AI today</p>
+        </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="bg-white p-10 rounded-xl shadow-lg w-full max-w-md"
-      >
+        <div className="glass-strong" style={{padding:"2rem 2.25rem"}}>
+          {error && <div className="err-box" style={{marginBottom:"1rem"}}>⚠️ {error}</div>}
 
-        <h1 className="text-3xl font-bold mb-6 text-center text-blue-600">
-          Create Account
-        </h1>
+          <form onSubmit={handleRegister} style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+            {fields.map(({k,l,t,p})=>(
+              <div key={k}>
+                <label className="input-label">{l}</label>
+                <input className="input" type={t} placeholder={p}
+                  value={form[k]} onChange={set(k)} required/>
+              </div>
+            ))}
+            <button type="submit" className="btn btn-primary btn-full btn-lg"
+              disabled={loading} style={{marginTop:"0.25rem"}}>
+              {loading ? <><span className="spin"/> Creating account...</> : "Create Account →"}
+            </button>
+          </form>
 
-        <form onSubmit={handleRegister} className="space-y-4">
-
-          <input
-            type="text"
-            placeholder="Full Name"
-            value={name}
-            onChange={(e)=>setName(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e)=>setEmail(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <input
-            type="text"
-            placeholder="College / Organization"
-            value={organization}
-            onChange={(e)=>setOrganization(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e)=>setPassword(e.target.value)}
-            className="w-full border p-3 rounded-lg"
-            required
-          />
-
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition"
-          >
-            Register
-          </button>
-
-        </form>
-
-        <p className="text-center mt-6 text-gray-600">
-
-          Already have an account?{" "}
-
-          <Link to="/login" className="text-blue-600 hover:underline">
-            Login
-          </Link>
-
-        </p>
-
+          <hr className="div"/>
+          <p style={{textAlign:"center",color:"#64748b",fontSize:"0.84rem"}}>
+            Already have an account?{" "}
+            <Link to="/login" style={{color:"#3b7ef8",textDecoration:"none",fontWeight:600}}>Sign in</Link>
+          </p>
+        </div>
       </motion.div>
-
     </div>
-
   );
-
 }

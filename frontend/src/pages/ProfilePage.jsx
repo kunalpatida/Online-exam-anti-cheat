@@ -4,102 +4,40 @@ import { motion } from "framer-motion";
 import api from "../api/axios";
 
 export default function ProfilePage() {
-
   const [data, setData] = useState(null);
   const navigate = useNavigate();
+  useEffect(()=>{ api.get("/exam/profile").then(r=>setData(r.data)).catch(()=>navigate("/login")); },[]);
+  const logout=()=>{ localStorage.removeItem("token"); navigate("/"); };
 
-  useEffect(() => {
-    api.get("/exam/profile")
-      .then(res => setData(res.data))
-      .catch(err => {
-        console.error(err);
-        alert("Failed to load profile");
-      });
-  }, []);
-
-  // Logout function
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/");
-  };
-
-  if (!data) {
-    return (
-      <div className="h-screen flex justify-center items-center text-xl">
-        Loading profile...
-      </div>
-    );
-  }
+  if(!data) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spin spin-blue" style={{width:32,height:32}}/></div>;
 
   return (
-
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 flex items-center justify-center p-6">
-
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white shadow-xl rounded-2xl p-10 w-full max-w-md text-center"
-      >
-
-        {/* Avatar */}
-        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold shadow">
-          {data.user.name.charAt(0).toUpperCase()}
-        </div>
-
-        {/* Name */}
-        <h2 className="text-2xl font-bold text-gray-800">
-          {data.user.name}
-        </h2>
-
-        {/* Email */}
-        <p className="text-gray-500 mb-6">
-          {data.user.email}
-        </p>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-
-          <div className="bg-blue-50 p-4 rounded-xl">
-            <p className="text-xl font-bold text-blue-600">
-              {data.created}
-            </p>
-            <p className="text-sm text-gray-600">
-              Exams Created
-            </p>
+    <div className="page-center">
+      <motion.div className="wrap-sm" style={{width:"100%"}} initial={{opacity:0,y:28}} animate={{opacity:1,y:0}}>
+        <div className="glass-strong" style={{padding:"2.25rem",textAlign:"center"}}>
+          <div style={{width:68,height:68,borderRadius:"50%",background:"linear-gradient(135deg,#3b7ef8,#60a5fa)",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.65rem",fontWeight:800,
+            margin:"0 auto 1.1rem",boxShadow:"0 8px 28px rgba(59,126,248,0.3)",color:"#fff"}}>
+            {data.user.name?.charAt(0).toUpperCase()}
           </div>
-
-          <div className="bg-green-50 p-4 rounded-xl">
-            <p className="text-xl font-bold text-green-600">
-              {data.attempted}
-            </p>
-            <p className="text-sm text-gray-600">
-              Exams Attempted
-            </p>
+          <h2 style={{fontWeight:800,fontSize:"1.35rem",letterSpacing:"-0.02em",color:"#0f172a"}}>{data.user.name}</h2>
+          <p style={{color:"#64748b",marginTop:"0.25rem",marginBottom:"1.75rem",fontSize:"0.88rem"}}>{data.user.email}</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.85rem",marginBottom:"1.75rem"}}>
+            <div className="glass" style={{padding:"1.1rem"}}>
+              <div style={{fontWeight:800,fontSize:"1.75rem",color:"#3b7ef8"}}>{data.created}</div>
+              <div style={{color:"#64748b",fontSize:"0.76rem",marginTop:"0.15rem"}}>Exams Created</div>
+            </div>
+            <div className="glass" style={{padding:"1.1rem"}}>
+              <div style={{fontWeight:800,fontSize:"1.75rem",color:"#059669"}}>{data.attempted}</div>
+              <div style={{color:"#64748b",fontSize:"0.76rem",marginTop:"0.15rem"}}>Exams Attempted</div>
+            </div>
           </div>
-
+          <div style={{display:"flex",flexDirection:"column",gap:"0.65rem"}}>
+            <button className="btn btn-secondary btn-full" onClick={()=>navigate("/dashboard")}>← Dashboard</button>
+            <button className="btn btn-danger btn-full" onClick={logout}>Logout</button>
+          </div>
         </div>
-
-        {/* Buttons */}
-        <div className="flex flex-col gap-3">
-
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="bg-gray-200 py-2 rounded-lg hover:bg-gray-300 transition"
-          >
-            Back to Dashboard
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition"
-          >
-            Logout
-          </button>
-
-        </div>
-
       </motion.div>
-
     </div>
   );
 }

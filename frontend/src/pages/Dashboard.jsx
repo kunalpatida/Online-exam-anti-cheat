@@ -4,263 +4,156 @@ import { motion } from "framer-motion";
 import api from "../api/axios";
 
 export default function Dashboard() {
-
   const navigate = useNavigate();
-
   const [examCode, setExamCode] = useState("");
-  const [exams, setExams] = useState([]);
-  const [user, setUser] = useState(null);
+  const [exams, setExams]       = useState([]);
+  const [user, setUser]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [joining, setJoining]   = useState(false);
+  const [toast, setToast]       = useState(null);
 
-  // ================================
-  // LOAD USER + EXAMS
-  // ================================
-  useEffect(() => {
+  const showToast = (msg, type="s") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
-    const loadData = async () => {
+  useEffect(()=>{
+    Promise.all([api.get("/exam/profile"), api.get("/exam/list")])
+      .then(([p,e])=>{ setUser(p.data.user); setExams(Array.isArray(e.data)?e.data:[]); })
+      .catch(()=>showToast("Failed to load","e"))
+      .finally(()=>setLoading(false));
+  },[]);
 
-      try {
-
-        const profileRes = await api.get("/exam/profile");
-        setUser(profileRes.data.user);
-
-        const examRes = await api.get("/exam/list");
-        setExams(Array.isArray(examRes.data) ? examRes.data : []);
-
-      } catch (err) {
-        console.error("Dashboard load error:", err);
-      }
-
-    };
-
-    loadData();
-
-  }, []);
-
-  // ================================
-  // JOIN EXAM
-  // ================================
-  const handleJoinExam = async () => {
-
-    if (!examCode) {
-      alert("Enter exam code");
-      return;
-    }
-
+  const handleJoin = async () => {
+    if(!examCode.trim()) return showToast("Enter exam code","e");
+    setJoining(true);
     try {
-
-      const res = await api.post("/exam/join", {
-        exam_code: examCode
-      });
-
-      navigate(`/exam/${res.data.exam.exam_id}`);
-
-    } catch {
-      alert("Invalid or expired exam code");
-    }
+      const r = await api.post("/exam/join",{exam_code:examCode.trim().toUpperCase()});
+      navigate(`/exam/${r.data.exam.exam_id}`);
+    } catch(err){ showToast(err.response?.data?.error||"Invalid code","e"); }
+    finally { setJoining(false); }
   };
 
-  // ================================
-  // COPY CODE
-  // ================================
-  const copyCode = (code) => {
-    navigator.clipboard.writeText(code);
-    alert("Copied: " + code);
-  };
+  const copyCode = code => { navigator.clipboard.writeText(code); showToast("Copied: "+code); };
 
-  // ================================
-  // LOGOUT
-  // ================================
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/login");
-  };
+  if(loading) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{textAlign:"center"}}>
+        <div className="spin spin-blue" style={{width:32,height:32,marginBottom:"0.9rem"}}/>
+        <p style={{color:"#64748b",fontSize:"0.9rem"}}>Loading dashboard...</p>
+      </div>
+    </div>
+  );
 
   return (
-
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-blue-100 p-8">
-
-      {/* HEADER */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex justify-between items-center mb-10"
-      >
-
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">
-            Dashboard
-          </h1>
-          <p className="text-gray-500 text-sm">
-            Welcome {user?.name || "User"}
-          </p>
-        </div>
-
-        {/* 🔥 AVATAR */}
-        <Link to="/profile">
-          <div
-            title="Profile"
-            className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white flex items-center justify-center text-lg font-bold shadow-md hover:scale-110 transition"
-          >
-            {user?.name?.charAt(0).toUpperCase() || "U"}
-          </div>
-        </Link>
-
-      </motion.div>
-
-
-      {/* ACTION CARDS */}
-      <div className="grid md:grid-cols-2 gap-8 mb-14">
-
-        {/* JOIN EXAM */}
-        <motion.div
-          whileHover={{ scale: 1.03 }}
-          className="bg-white p-8 rounded-2xl shadow-md hover:shadow-xl transition"
-        >
-
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">
-            Join Exam
-          </h2>
-
-          <input
-            type="text"
-            placeholder="Enter exam code..."
-            value={examCode}
-            onChange={(e) => setExamCode(e.target.value)}
-            className="border w-full p-3 rounded-lg mb-4 focus:ring-2 focus:ring-blue-400 outline-none"
-          />
-
-          <button
-            onClick={handleJoinExam}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg w-full hover:bg-blue-700 transition"
-          >
-            Join Now
-          </button>
-
-        </motion.div>
-
-
-        {/* CREATE EXAM */}
-        <motion.div
-          whileHover={{ scale: 1.03 }}
-          className="bg-white p-8 rounded-2xl shadow-md hover:shadow-xl transition"
-        >
-
-          <h2 className="text-xl font-semibold mb-2 text-gray-800">
-            Create Exam
-          </h2>
-
-          <p className="text-gray-500 mb-4 text-sm">
-            Create a new exam and share it with students.
-          </p>
-
-          <button
-            onClick={() => navigate("/create-exam")}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition w-full"
-          >
-            Create New Exam
-          </button>
-
-        </motion.div>
-
+    <div className="page">
+      {/* Toast */}
+      <div className="toast-wrap">
+        {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
       </div>
 
+      <div className="wrap">
+        {/* Header */}
+        <motion.div initial={{opacity:0,y:-16}} animate={{opacity:1,y:0}}
+          style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+            marginBottom:"1.75rem",flexWrap:"wrap",gap:"0.75rem"}}>
+          <div>
+            <h1 style={{fontWeight:800,fontSize:"clamp(1.4rem,4vw,1.9rem)",letterSpacing:"-0.03em",color:"#0f172a"}}>
+              Dashboard
+            </h1>
+            <p style={{color:"#64748b",marginTop:"0.2rem",fontSize:"0.99rem"}}>
+              Welcome back, {user?.name||"User"} 👋
+            </p>
+          </div>
+          <Link to="/profile" style={{textDecoration:"none"}}>
+            <motion.div whileHover={{scale:1.08}}
+              style={{width:42,height:42,borderRadius:"50%",
+                background:"linear-gradient(135deg,#3b7ef8,#60a5fa)",
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontWeight:800,fontSize:"1rem",color:"#fff",cursor:"pointer",
+                boxShadow:"0 4px 16px rgba(59,126,248,0.32)"}}>
+              {user?.name?.charAt(0).toUpperCase()||"U"}
+            </motion.div>
+          </Link>
+        </motion.div>
 
-      {/* EXAMS TABLE */}
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        {/* Action Cards */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"1rem",marginBottom:"1.5rem"}}>
+          <motion.div className="glass" style={{padding:"1.6rem"}}
+            initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.08}}>
+            <h2 style={{fontWeight:700,fontSize:"0.95rem",marginBottom:"0.9rem",color:"#0f172a"}}>🚀 Join Exam</h2>
+            <input className="input" placeholder="Enter exam code..." value={examCode}
+              onChange={e=>setExamCode(e.target.value.toUpperCase())}
+              onKeyDown={e=>e.key==="Enter"&&handleJoin()}
+              style={{marginBottom:"0.65rem"}}/>
+            <button className="btn btn-primary btn-full" onClick={handleJoin} disabled={joining}>
+              {joining?<><span className="spin"/>Joining...</>:"Join Now →"}
+            </button>
+          </motion.div>
 
-        <h2 className="text-2xl font-semibold mb-6 text-gray-800">
-          My Exams
-        </h2>
-
-        <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-
-          <table className="w-full text-left">
-
-            <thead className="bg-gray-50 text-gray-600 text-sm">
-              <tr>
-                <th className="p-4">Title</th>
-                <th>Duration</th>
-                <th>Marks</th>
-                <th>Code</th>
-                <th className="text-center">Attempts</th>
-                <th className="text-center">Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {exams.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="text-center py-8 text-gray-400">
-                    No exams created yet
-                  </td>
-                </tr>
-              ) : (
-
-                exams.map((exam) => (
-
-                  <tr
-                    key={exam.exam_id}
-                    className="border-t hover:bg-gray-50 transition"
-                  >
-
-                    <td className="p-4 font-medium text-gray-800">
-                      {exam.title}
-                    </td>
-
-                    <td>{exam.duration_minutes} min</td>
-
-                    <td>{exam.total_marks}</td>
-
-                    <td className="font-mono text-blue-600">
-                      {exam.exam_code}
-                    </td>
-
-                    <td className="text-center">
-                      <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs">
-                        {exam.attempts || 0}
-                      </span>
-                    </td>
-
-                    <td className="text-center flex justify-center gap-2 py-3">
-
-                      <button
-                        onClick={() => copyCode(exam.exam_code)}
-                        className="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300 text-sm"
-                      >
-                        Copy
-                      </button>
-
-                      <Link
-                        to={`/results/${exam.exam_id}`}
-                        className="bg-green-500 text-white px-3 py-1 rounded text-sm"
-                      >
-                        Results
-                      </Link>
-
-                      <Link
-                        to={`/analytics/${exam.exam_id}`}
-                        className="bg-purple-500 text-white px-3 py-1 rounded text-sm"
-                      >
-                        Analytics
-                      </Link>
-
-                    </td>
-
-                  </tr>
-
-                ))
-
-              )}
-
-            </tbody>
-
-          </table>
-
+          <motion.div className="glass" style={{padding:"1.6rem"}}
+            initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{delay:0.13}}>
+            <h2 style={{fontWeight:700,fontSize:"0.95rem",marginBottom:"0.45rem",color:"#0f172a"}}>✨ Create Exam</h2>
+            <p style={{color:"#64748b",fontSize:"0.83rem",marginBottom:"1.1rem",lineHeight:1.55}}>
+              Build a new exam and share the code with your students.
+            </p>
+            <button className="btn btn-success btn-full" onClick={()=>navigate("/create-exam")}>
+              + Create New Exam
+            </button>
+          </motion.div>
         </div>
 
-      </motion.div>
-      
+        {/* Exams Table */}
+        <motion.div className="glass" style={{padding:"1.6rem"}}
+          initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.18}}>
+          <h2 style={{fontWeight:700,fontSize:"0.95rem",marginBottom:"1.1rem",color:"#0f172a"}}>📋 My Exams</h2>
+
+          {exams.length===0 ? (
+            <div style={{textAlign:"center",padding:"2.5rem 1rem",color:"#94a3b8"}}>
+              <div style={{fontSize:"2.25rem",marginBottom:"0.6rem"}}>📝</div>
+              <p style={{fontSize:"0.88rem"}}>No exams yet. Create your first one!</p>
+            </div>
+          ) : (
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th className="hide-m">Duration</th>
+                    <th className="hide-m">Marks</th>
+                    <th>Code</th>
+                    <th className="hide-m">Attempts</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exams.map(ex=>(
+                    <tr key={ex.exam_id}>
+                      <td style={{fontWeight:600}}>{ex.title}</td>
+                      <td className="hide-m" style={{color:"#64748b"}}>{ex.duration_minutes}m</td>
+                      <td className="hide-m" style={{color:"#64748b"}}>{ex.total_marks}</td>
+                      <td><span style={{fontFamily:"monospace",color:"#3b7ef8",fontWeight:600,fontSize:"0.88rem"}}>{ex.exam_code}</span></td>
+                      <td className="hide-m"><span className="badge badge-blue">{ex.attempts||0}</span></td>
+                      <td>
+                        <div style={{display:"flex",gap:"0.4rem",flexWrap:"wrap"}}>
+                          <button className="btn btn-secondary btn-sm" onClick={()=>copyCode(ex.exam_code)}>Copy</button>
+                          <Link to={`/results/${ex.exam_id}`} className="btn btn-sm"
+                            style={{background:"#dcfce7",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:"var(--r-sm)",
+                              textDecoration:"none",padding:"0.4rem 0.85rem",fontSize:"0.78rem",display:"inline-flex",alignItems:"center"}}>
+                            Results
+                          </Link>
+                          <Link to={`/analytics/${ex.exam_id}`} className="btn btn-sm"
+                            style={{background:"#ede9fe",color:"#6d28d9",border:"1px solid #ddd6fe",borderRadius:"var(--r-sm)",
+                              textDecoration:"none",padding:"0.4rem 0.85rem",fontSize:"0.78rem",display:"inline-flex",alignItems:"center"}}>
+                            Analytics
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 }

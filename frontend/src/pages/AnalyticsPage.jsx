@@ -1,159 +1,111 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { motion } from "framer-motion";
 import api from "../api/axios";
 
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from "recharts";
+const TT = ({active,payload,label}) => !active||!payload?.length ? null : (
+  <div style={{background:"rgba(255,255,255,0.95)",border:"1px solid #bfdbfe",borderRadius:8,padding:"0.5rem 0.9rem",fontSize:"0.82rem"}}>
+    <p style={{color:"#64748b",marginBottom:"0.2rem"}}>{label}</p>
+    <p style={{color:"#2563eb",fontWeight:700}}>{payload[0].value}</p>
+  </div>
+);
 
 export default function AnalyticsPage() {
-
   const { id } = useParams();
-  const [data, setData] = useState([]);
+  const navigate = useNavigate();
+  const [data, setData]     = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api.get(`/exam/results/${id}`)
-      .then(res => {
+  useEffect(()=>{
+    api.get(`/exam/results/${id}`).then(r=>setData(Array.isArray(r.data)?r.data:[])).catch(()=>{}).finally(()=>setLoading(false));
+  },[id]);
 
-        console.log("ANALYTICS RAW:", res.data); // DEBUG
+  const scoreData = data.map(d=>({name:d.name?.split(" ")[0]||"?",score:Number(d.score)||0}));
+  const passCount = data.filter(d=>Number(d.score)>=(Number(d.total_marks)*0.4)).length;
+  const pieData   = [{name:"Pass",value:passCount},{name:"Fail",value:data.length-passCount}];
+  const avg       = data.length?(data.reduce((s,d)=>s+Number(d.score),0)/data.length).toFixed(1):0;
+  const max       = data.length?Math.max(...data.map(d=>Number(d.score))):0;
+  const cheats    = data.reduce((s,d)=>s+(d.cheat_count||0),0);
 
-        // 🔥 FIXED DATA HANDLING
-        if (Array.isArray(res.data)) {
-          setData(res.data);
-        } else if (Array.isArray(res.data.results)) {
-          setData(res.data.results);
-        } else {
-          setData([]);
-        }
-
-      })
-      .catch(err => {
-        console.error(err);
-        alert("Failed to load analytics");
-      });
-  }, [id]);
-
-  // Safe mapping
-  const scoreData = data.map(d => ({
-    name: d.name || "Student",
-    score: Number(d.score) || 0
-  }));
-
-  const passCount = data.filter(d => {
-    const score = Number(d.score) || 0;
-    const total = Number(d.total_marks) || 1;
-    return score >= total * 0.4;
-  }).length;
-
-  const failCount = data.length - passCount;
-
-  const pieData = [
-    { name: "Pass", value: passCount },
-    { name: "Fail", value: failCount }
-  ];
-
-  const COLORS = ["#22c55e", "#ef4444"];
+  if(loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spin spin-blue" style={{width:32,height:32}}/></div>;
 
   return (
-
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-10">
-
-      <div className="max-w-6xl mx-auto">
-
-        <h1 className="text-3xl font-bold mb-10 text-center">
-          Exam Analytics
-        </h1>
-
-        {/* Charts */}
-        <div className="grid md:grid-cols-2 gap-10">
-
-          {/* Bar Chart */}
-          <div className="bg-white p-6 rounded-xl shadow">
-            <h2 className="text-lg font-semibold mb-4">Student Scores</h2>
-
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={scoreData}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="score" />
-              </BarChart>
-            </ResponsiveContainer>
+    <div className="page">
+      <div className="wrap">
+        <motion.div initial={{opacity:0,y:-16}} animate={{opacity:1,y:0}}
+          style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.5rem",flexWrap:"wrap",gap:"0.75rem"}}>
+          <div>
+            <h1 style={{fontWeight:800,fontSize:"1.6rem",letterSpacing:"-0.03em",color:"#0f172a"}}>Analytics</h1>
+            <p style={{color:"#64748b",fontSize:"0.85rem",marginTop:"0.2rem"}}>{data.length} student(s)</p>
           </div>
+          <button className="btn btn-secondary" onClick={()=>navigate("/dashboard")}>← Dashboard</button>
+        </motion.div>
 
-          {/* Pie Chart */}
-          <div className="bg-white p-6 rounded-xl shadow">
-            <h2 className="text-lg font-semibold mb-4">Pass vs Fail</h2>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:"0.85rem",marginBottom:"1.25rem"}}>
+          {[{v:data.length,l:"Students",c:"#3b7ef8"},{v:avg,l:"Avg Score",c:"#059669"},{v:max,l:"Highest",c:"#7c3aed"},{v:cheats,l:"Cheat Events",c:"#dc2626"}].map((s,i)=>(
+            <motion.div key={i} className="glass" style={{padding:"1.15rem",textAlign:"center"}}
+              initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:i*0.07}}>
+              <div style={{fontWeight:800,fontSize:"1.65rem",color:s.c,letterSpacing:"-0.04em"}}>{s.v}</div>
+              <div style={{color:"#64748b",fontSize:"0.76rem",marginTop:"0.15rem",fontWeight:500}}>{s.l}</div>
+            </motion.div>
+          ))}
+        </div>
 
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" outerRadius={100} label>
-                  {pieData.map((entry, index) => (
-                    <Cell key={index} fill={COLORS[index]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+        {data.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"1rem",marginBottom:"1.25rem"}}>
+            <div className="glass" style={{padding:"1.4rem"}}>
+              <h3 style={{fontWeight:700,fontSize:"0.88rem",marginBottom:"0.9rem",color:"#0f172a"}}>Student Scores</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={scoreData}>
+                  <XAxis dataKey="name" tick={{fill:"#94a3b8",fontSize:11}} axisLine={false} tickLine={false}/>
+                  <YAxis tick={{fill:"#94a3b8",fontSize:11}} axisLine={false} tickLine={false}/>
+                  <Tooltip content={<TT/>}/>
+                  <Bar dataKey="score" fill="#3b7ef8" radius={[5,5,0,0]}/>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="glass" style={{padding:"1.4rem"}}>
+              <h3 style={{fontWeight:700,fontSize:"0.88rem",marginBottom:"0.9rem",color:"#0f172a"}}>Pass vs Fail</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" outerRadius={75} label={({name,value})=>`${name}: ${value}`} labelLine={false}>
+                    {pieData.map((_,i)=><Cell key={i} fill={i===0?"#10b981":"#ef4444"}/>)}
+                  </Pie>
+                  <Tooltip contentStyle={{background:"rgba(255,255,255,0.95)",border:"1px solid #bfdbfe",borderRadius:8}}/>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
+        )}
 
+        <div className="glass" style={{padding:"1.4rem"}}>
+          <h3 style={{fontWeight:700,fontSize:"0.88rem",marginBottom:"0.9rem",color:"#0f172a"}}>Detailed Results</h3>
+          <div className="tbl-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Score</th><th>Total</th><th>%</th><th>Status</th><th>Cheats</th></tr></thead>
+              <tbody>
+                {data.length===0?(
+                  <tr><td colSpan={6} style={{textAlign:"center",color:"#94a3b8",padding:"2rem"}}>No results</td></tr>
+                ):data.map((d,i)=>{
+                  const pct=Math.round((Number(d.score)/Number(d.total_marks))*100)||0;
+                  const pass=pct>=40;
+                  return (
+                    <tr key={i}>
+                      <td style={{fontWeight:600}}>{d.name}</td>
+                      <td style={{color:"#3b7ef8",fontWeight:700}}>{d.score}</td>
+                      <td style={{color:"#64748b"}}>{d.total_marks}</td>
+                      <td style={{color:"#64748b"}}>{pct}%</td>
+                      <td><span className={`badge ${pass?"badge-green":"badge-red"}`}>{pass?"Pass":"Fail"}</span></td>
+                      <td>{d.cheat_count>0?<span className="badge badge-red">⚠️ {d.cheat_count}</span>:<span style={{color:"#94a3b8"}}>—</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-
-        {/* Cheat logs */}
-        <div className="mt-10 bg-white p-6 rounded-xl shadow">
-          <h2 className="text-lg font-semibold mb-4">Cheating Activity</h2>
-
-          {data.length === 0 ? (
-            <p>No data available</p>
-          ) : (
-            data.map((d, i) => (
-              <p key={i}>
-                {d.name}: {d.cheat_count || 0} suspicious actions
-              </p>
-            ))
-          )}
-        </div>
-
-        {/* Table */}
-        <div className="mt-10 bg-white p-6 rounded-xl shadow">
-
-          <h2 className="text-lg font-semibold mb-4">Detailed Results</h2>
-
-          <table className="w-full border">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2">Name</th>
-                <th className="p-2">Score</th>
-                <th className="p-2">Total</th>
-                <th className="p-2">Cheat Logs</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {data.map((d, i) => (
-                <tr key={i} className="text-center border-t">
-                  <td className="p-2">{d.name}</td>
-                  <td className="p-2">{d.score}</td>
-                  <td className="p-2">{d.total_marks}</td>
-                  <td className="p-2">{d.cheat_count || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-
-          </table>
-
-        </div>
-
       </div>
-
     </div>
   );
 }

@@ -1,210 +1,122 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
+const features = [
+  { icon:"⚡", title:"AI Question Generation", desc:"Generate full exams in seconds with Gemini AI — any topic, any difficulty." },
+  { icon:"🛡️", title:"Anti-Cheat System",      desc:"Tab-switch detection, copy-paste block, auto-submit on violations." },
+  { icon:"📊", title:"Live Analytics",          desc:"Real-time scores, pass/fail charts, and cheating activity logs." },
+  { icon:"⏱️", title:"Smart Timer",             desc:"Server-synced countdown — refresh-proof, session always persists." },
+  { icon:"✍️", title:"MCQ + Descriptive",       desc:"Auto-grade MCQs. Manual evaluation panel for written answers." },
+  { icon:"📱", title:"Mobile Ready",            desc:"Fully responsive — works perfectly on phones, tablets, desktops." },
+];
+
 export default function Home() {
-
-  const features = [
-    {
-      title: "Create Exams Easily",
-      desc: "Generate exams with unique codes for instant access."
-    },
-    {
-      title: "AI Question Generation",
-      desc: "Automatically generate smart MCQs using AI."
-    },
-    {
-      title: "Anti-Cheating System",
-      desc: "Detect tab switching and suspicious behavior."
-    },
-    {
-      title: "MCQ + Descriptive",
-      desc: "Support both objective and written answers."
-    },
-    {
-      title: "Auto Evaluation",
-      desc: "Instant result calculation with accuracy."
-    },
-    {
-      title: "Analytics Dashboard",
-      desc: "Track performance and cheating logs."
-    }
-  ];
-
   return (
-
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-blue-100 overflow-hidden">
-
-      {/* Background glow */}
-      <div className="absolute top-20 left-20 w-40 h-40 bg-blue-300 blur-3xl opacity-20 rounded-full" />
-      <div className="absolute bottom-20 right-20 w-60 h-60 bg-purple-300 blur-3xl opacity-20 rounded-full" />
+    <div style={{minHeight:"100vh",overflowX:"hidden"}}>
 
       {/* Navbar */}
-      <nav className="flex justify-between items-center px-10 py-5 bg-white/70 backdrop-blur-md shadow">
-
-        <h1 className="text-xl font-bold text-blue-600">
-          SmartExam AI
-        </h1>
-
-        <div className="flex gap-4">
-
-          <Link
-            to="/login"
-            className="px-5 py-2 text-gray-700 hover:text-blue-600 transition"
-          >
-            Login
-          </Link>
-
-          <Link
-            to="/register"
-            className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition"
-          >
-            Register
-          </Link>
-
+      <motion.nav initial={{y:-20,opacity:0}} animate={{y:0,opacity:1}}
+        style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+          padding:"0.9rem 1.5rem",background:"rgba(255,255,255,0.75)",
+          backdropFilter:"blur(18px)",borderBottom:"1px solid rgba(59,126,248,0.1)",
+          position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
+          <div style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#3b7ef8,#60a5fa)",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,
+            boxShadow:"0 4px 12px rgba(59,126,248,0.3)"}}>🎓</div>
+          <span style={{fontWeight:800,fontSize:"1.05rem",color:"#0f172a",letterSpacing:"-0.03em"}}>
+            SmartExam <span style={{color:"#3b7ef8"}}>AI</span>
+          </span>
         </div>
+        <div style={{display:"flex",gap:"0.5rem"}}>
+          <Link to="/login"    className="btn btn-secondary btn-sm">Login</Link>
+          <Link to="/register" className="btn btn-primary btn-sm">Get Started</Link>
+        </div>
+      </motion.nav>
 
-      </nav>
-
-
-      {/* HERO SECTION */}
-      <section className="grid md:grid-cols-2 gap-10 items-center px-10 mt-24">
-
-        {/* Left */}
-        <div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: -40 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-5xl font-bold text-gray-800 mb-6 leading-tight"
-          >
-            AI Powered <span className="text-blue-600">Online Exam System</span>
-          </motion.h1>
-
-          <p className="text-gray-600 mb-8 text-lg">
-            Build smart exams, prevent cheating, and evaluate instantly.
-            Designed for modern education with AI integration.
+      {/* Hero */}
+      <section style={{textAlign:"center",padding:"5rem 1.25rem 3.5rem",maxWidth:760,margin:"0 auto"}}>
+        <motion.div initial={{opacity:0,y:32}} animate={{opacity:1,y:0}} transition={{duration:0.5}}>
+          <span className="badge badge-blue" style={{marginBottom:"1.25rem",display:"inline-flex",fontSize:"0.78rem"}}>
+            ✨ Powered by Gemini AI
+          </span>
+          <h1 style={{fontWeight:800,letterSpacing:"-0.04em",lineHeight:1.1,
+            fontSize:"clamp(2.1rem,6vw,3.8rem)",color:"#0f172a",marginBottom:"1.25rem"}}>
+            The Smartest Way to<br/>
+            <span style={{background:"linear-gradient(135deg,#3b7ef8,#60a5fa)",
+              WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
+              Run Online Exams
+            </span>
+          </h1>
+          <p style={{color:"#475569",fontSize:"clamp(0.95rem,2.5vw,1.05rem)",lineHeight:1.75,
+            maxWidth:500,margin:"0 auto 2.25rem"}}>
+            Create AI-powered exams in minutes. Auto-grade, detect cheating, and get deep analytics — all in one clean platform.
           </p>
-
-          <div className="flex gap-4">
-
-            <Link
-              to="/login"
-              className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 shadow-lg transition"
-            >
-              Get Started
-            </Link>
-
-            <Link
-              to="/register"
-              className="border border-blue-600 text-blue-600 px-8 py-3 rounded-xl hover:bg-blue-50 transition"
-            >
-              Create Account
-            </Link>
-
+          <div style={{display:"flex",gap:"0.65rem",justifyContent:"center",flexWrap:"wrap"}}>
+            <Link to="/register" className="btn btn-primary btn-lg">Start for Free →</Link>
+            <Link to="/login"    className="btn btn-secondary btn-lg">Sign In</Link>
           </div>
-
-        </div>
-
-        {/* Right (AI highlight card) */}
-        <motion.div
-          initial={{ opacity: 0, x: 60 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="bg-white p-8 rounded-2xl shadow-xl border"
-        >
-
-          <h3 className="text-xl font-bold mb-4 text-purple-600">
-            AI Features
-          </h3>
-
-          <ul className="space-y-3 text-gray-600">
-
-            <li>Generate full exams instantly</li>
-            <li>Create smart MCQ options</li>
-            <li>Reduce manual effort by 80%</li>
-            <li>Consistent and scalable question sets</li>
-
-          </ul>
-
         </motion.div>
 
       </section>
 
-
-      {/* STATS SECTION */}
-      <section className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-6 px-10 text-center">
-
-        {[
-          { label: "AI Generated Questions", value: "1000+" },
-          { label: "Secure Exams", value: "100+" },
-          { label: "Active Users", value: "500+" },
-          { label: "Accuracy", value: "99%" }
-        ].map((item, i) => (
-
-          <div key={i} className="bg-white p-6 rounded-xl shadow">
-
-            <h3 className="text-2xl font-bold text-blue-600">
-              {item.value}
-            </h3>
-
-            <p className="text-gray-500">
-              {item.label}
-            </p>
-
-          </div>
-
-        ))}
-
-      </section>
-
-
-      {/* FEATURES */}
-      <section className="mt-28 px-10 pb-20">
-
-        <h2 className="text-4xl font-bold text-center mb-14">
-          Platform Features
-        </h2>
-
-        <div className="grid md:grid-cols-3 gap-8">
-
-          {features.map((f, index) => (
-
-            <motion.div
-              key={index}
-              whileHover={{ scale: 1.05 }}
-              className="bg-white/80 backdrop-blur p-6 rounded-xl shadow-lg hover:shadow-2xl transition"
-            >
-
-              <h3 className="font-semibold text-lg mb-2 text-blue-600">
-                {f.title}
-              </h3>
-
-              <p className="text-gray-600">
-                {f.desc}
-              </p>
-
-            </motion.div>
-
+      {/* Stats */}
+      <section style={{padding:"1rem 1.25rem 3rem",maxWidth:820,margin:"0 auto"}}>
+        <motion.div initial={{opacity:0,y:16}} whileInView={{opacity:1,y:0}} viewport={{once:true}}
+          style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:"0.9rem"}}>
+          {[{v:"1000+",l:"AI Questions"},{v:"500+",l:"Active Users"},{v:"99%",l:"Accuracy"},{v:"< 1s",l:"Grading Speed"}].map((s,i)=>(
+            <div key={i} className="glass" style={{padding:"1.25rem",textAlign:"center"}}>
+              <div style={{fontWeight:800,fontSize:"1.75rem",color:"#3b7ef8",letterSpacing:"-0.04em"}}>{s.v}</div>
+              <div style={{color:"#64748b",fontSize:"0.78rem",marginTop:"0.18rem",fontWeight:500}}>{s.l}</div>
+            </div>
           ))}
-
-        </div>
-
+        </motion.div>
       </section>
 
+      {/* Features */}
+      <section style={{padding:"2.5rem 1.25rem 4rem",maxWidth:940,margin:"0 auto"}}>
+        <motion.div initial={{opacity:0}} whileInView={{opacity:1}} viewport={{once:true}}
+          style={{textAlign:"center",marginBottom:"2.5rem"}}>
+          <h2 style={{fontWeight:800,fontSize:"clamp(1.5rem,4vw,2rem)",letterSpacing:"-0.03em",color:"#0f172a"}}>
+            Everything you need
+          </h2>
+          <p style={{color:"#64748b",marginTop:"0.5rem",fontSize:"0.9rem"}}>One platform. Every feature. Zero compromise.</p>
+        </motion.div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"1rem"}}>
+          {features.map((f,i)=>(
+            <motion.div key={i} className="glass"
+              initial={{opacity:0,y:16}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:i*0.06}}
+              whileHover={{y:-4,boxShadow:"0 12px 36px rgba(59,126,248,0.16)"}}
+              style={{padding:"1.5rem",transition:"all 0.22s"}}>
+              <div style={{width:40,height:40,borderRadius:10,
+                background:"linear-gradient(135deg,rgba(59,126,248,0.1),rgba(96,165,250,0.07))",
+                border:"1px solid rgba(59,126,248,0.14)",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.25rem",marginBottom:"0.9rem"}}>
+                {f.icon}
+              </div>
+              <h3 style={{fontWeight:700,fontSize:"0.92rem",marginBottom:"0.4rem",color:"#0f172a"}}>{f.title}</h3>
+              <p style={{color:"#64748b",fontSize:"0.83rem",lineHeight:1.65}}>{f.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </section>
 
       {/* CTA */}
-      <section className="text-center pb-20">
-
-        <h2 className="text-3xl font-bold mb-6">
-          Ready to create smarter exams?
-        </h2>
-
-        <Link
-          to="/register"
-          className="bg-purple-600 text-white px-10 py-4 rounded-xl hover:bg-purple-700 transition shadow-lg"
-        >
-          Start Now
-        </Link>
-
+      <section style={{padding:"1.5rem 1.25rem 5rem",maxWidth:580,margin:"0 auto",textAlign:"center"}}>
+        <motion.div className="glass-strong" style={{padding:"2.75rem 2rem"}}
+          initial={{opacity:0,scale:0.96}} whileInView={{opacity:1,scale:1}} viewport={{once:true}}>
+          <div style={{fontSize:"2.25rem",marginBottom:"0.9rem"}}>🚀</div>
+          <h2 style={{fontWeight:800,fontSize:"clamp(1.35rem,4vw,1.75rem)",letterSpacing:"-0.03em",marginBottom:"0.65rem",color:"#0f172a"}}>
+            Ready to transform your exams?
+          </h2>
+          <p style={{color:"#64748b",marginBottom:"1.6rem",fontSize:"0.9rem"}}>
+            Join hundreds of educators using SmartExam AI today.
+          </p>
+          <Link to="/register" className="btn btn-primary btn-lg btn-full"
+            style={{maxWidth:260,margin:"0 auto",display:"flex"}}>
+            Create Free Account →
+          </Link>
+        </motion.div>
       </section>
 
     </div>

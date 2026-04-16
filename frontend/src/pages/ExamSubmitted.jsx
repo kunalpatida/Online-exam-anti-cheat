@@ -1,44 +1,20 @@
-import { useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 
 export default function ExamSubmitted() {
-
-  const location = useLocation();
-  const result = location.state?.result;
-
+  const navigate = useNavigate();
   return (
-
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-100 to-blue-200">
-
-      <div className="bg-white p-10 rounded-xl shadow-xl text-center max-w-lg">
-
-        <h1 className="text-3xl font-bold text-green-600 mb-4">
-          Exam Submitted Successfully
-        </h1>
-
-        <p className="text-gray-600 mb-6">
-          Your responses have been recorded.
-        </p>
-
-        {result && (
-
-          <div className="bg-gray-100 p-6 rounded-lg mt-4">
-
-            <h2 className="text-xl font-semibold mb-2">
-              Your Result
-            </h2>
-
-            <p className="text-lg">
-              Score: <b>{result.score}</b>
-            </p>
-
-          </div>
-
-        )}
-
-      </div>
-
+    <div className="page-center">
+      <motion.div className="wrap-sm" style={{width:"100%"}} initial={{opacity:0,scale:0.92}} animate={{opacity:1,scale:1}}>
+        <div className="glass-strong" style={{padding:"2.75rem 2rem",textAlign:"center"}}>
+          <div style={{fontSize:"3.5rem",marginBottom:"1rem"}}>🎉</div>
+          <h1 style={{fontWeight:800,fontSize:"1.7rem",letterSpacing:"-0.03em",marginBottom:"0.65rem",color:"#0f172a"}}>Exam Submitted!</h1>
+          <p style={{color:"#64748b",marginBottom:"1.75rem",lineHeight:1.65,fontSize:"0.9rem"}}>
+            Your responses have been recorded. Results will be available once evaluated.
+          </p>
+          <button className="btn btn-primary btn-lg btn-full" onClick={()=>navigate("/dashboard")}>← Back to Dashboard</button>
+        </div>
+      </motion.div>
     </div>
-
   );
-
 }

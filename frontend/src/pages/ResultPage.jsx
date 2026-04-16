@@ -1,252 +1,125 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import api from "../api/axios";
 
 export default function ResultPage() {
-
   const { id } = useParams();
-
+  const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [answers, setAnswers] = useState([]);
-  const [marks, setMarks] = useState({});
-  const [evaluated, setEvaluated] = useState({});
+  const [marks, setMarks]     = useState({});
+  const [evald, setEvald]     = useState({});
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast]     = useState(null);
+  const showToast=(msg,type="s")=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);};
 
-  // FETCH RESULTS
-  useEffect(() => {
-    const fetchResults = async () => {
-      try {
-        const res = await api.get(`/exam/results/${id}`);
-        setResults(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchResults();
-  }, [id]);
+  useEffect(()=>{
+    Promise.all([api.get(`/exam/results/${id}`),api.get(`/exam/answers/${id}`)])
+      .then(([r,a])=>{ setResults(Array.isArray(r.data)?r.data:[]); setAnswers(Array.isArray(a.data)?a.data:[]); })
+      .catch(()=>showToast("Failed to load","e"))
+      .finally(()=>setLoading(false));
+  },[id]);
 
-  // FETCH ANSWERS
-  useEffect(() => {
-    const fetchAnswers = async () => {
-      try {
-        const res = await api.get(`/exam/answers/${id}`);
-        setAnswers(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error("Failed to load answers");
-      }
-    };
-    fetchAnswers();
-  }, [id]);
+  const evaluate=async(a,isEdit=false)=>{
+    const val=Number(marks[a.question_id]);
+    if(!val&&val!==0) return showToast("Enter marks","e");
+    try{
+      const r=await api.post("/exam/evaluate",{user_id:a.user_id,exam_id:id,question_id:a.question_id,marks:val});
+      setEvald(p=>({...p,[a.question_id]:true,[`e_${a.question_id}`]:false}));
+      showToast(`Saved! Score: ${r.data.current_score}/${r.data.total_marks}`);
+    }catch(err){showToast(err.response?.data?.error||"Failed","e");}
+  };
 
-  // 🔥 CALCULATE MAX MARKS PER QUESTION
-  const maxMarks =
-    results.length > 0
-      ? results[0].total_marks / (answers.length || 1)
-      : 0;
+  if(loading) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><div className="spin spin-blue" style={{width:32,height:32}}/></div>;
 
   return (
+    <div className="page">
+      <div className="toast-wrap">{toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}</div>
+      <div className="wrap">
+        <motion.div initial={{opacity:0,y:-16}} animate={{opacity:1,y:0}}
+          style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.5rem",flexWrap:"wrap",gap:"0.75rem"}}>
+          <div>
+            <h1 style={{fontWeight:800,fontSize:"1.6rem",letterSpacing:"-0.03em",color:"#0f172a"}}>Exam Results</h1>
+            <p style={{color:"#64748b",fontSize:"0.85rem",marginTop:"0.2rem"}}>{results.length} student(s)</p>
+          </div>
+          <button className="btn btn-secondary" onClick={()=>navigate("/dashboard")}>← Dashboard</button>
+        </motion.div>
 
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-10">
-
-      <motion.h1
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="text-3xl font-bold text-center mb-10"
-      >
-        Exam Results
-      </motion.h1>
-
-      {/* RESULTS */}
-      <div className="max-w-6xl mx-auto grid gap-6">
-
-        {results.map((r, index) => {
-
-          const percentage = r.total_marks
-            ? Math.round((r.score / r.total_marks) * 100)
-            : 0;
-
-          const status = percentage >= 40 ? "Pass" : "Fail";
-
-          return (
-
-            <div key={index} className="bg-white p-6 rounded-xl shadow flex justify-between">
-
-              <div>
-                <h2 className="font-semibold">{r.name}</h2>
-                <p className="text-gray-500 text-sm">{r.email}</p>
-              </div>
-
-              <div>
-                <p className="font-bold text-blue-600">
-                  {r.score} / {r.total_marks}
-                </p>
-                <p>{percentage}%</p>
-              </div>
-
-              <div>
-                <span className={`px-3 py-1 rounded ${
-                  status === "Pass"
-                    ? "bg-green-100 text-green-600"
-                    : "bg-red-100 text-red-600"
-                }`}>
-                  {status}
-                </span>
-              </div>
-
-              <div>
-                Cheat: {r.cheat_count}
-              </div>
-
-            </div>
-
-          );
-
-        })}
-
-      </div>
-
-      {/* DESCRIPTIVE */}
-      <div className="max-w-6xl mx-auto mt-12 bg-white p-6 rounded-xl shadow">
-
-        <h2 className="text-xl font-bold mb-6">
-          Descriptive Evaluation
-        </h2>
-
-        {answers.length === 0 && (
-          <p>No descriptive answers found</p>
+        {results.length===0?(
+          <div className="glass" style={{padding:"3rem",textAlign:"center"}}>
+            <div style={{fontSize:"2.5rem",marginBottom:"0.75rem"}}>📊</div>
+            <p style={{color:"#64748b"}}>No results yet</p>
+          </div>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:"0.7rem",marginBottom:"1.5rem"}}>
+            {results.map((r,i)=>{
+              const pct=r.total_marks?Math.round((r.score/r.total_marks)*100):0;
+              const pass=pct>=40;
+              return (
+                <motion.div key={i} className="glass" style={{padding:"1.2rem"}}
+                  initial={{opacity:0,x:-16}} animate={{opacity:1,x:0}} transition={{delay:i*0.05}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:"0.65rem"}}>
+                    <div>
+                      <p style={{fontWeight:700,color:"#0f172a"}}>{r.name}</p>
+                      <p style={{color:"#64748b",fontSize:"0.8rem"}}>{r.email}</p>
+                    </div>
+                    <div style={{display:"flex",gap:"0.5rem",alignItems:"center",flexWrap:"wrap"}}>
+                      {r.evaluation_status==="PENDING"&&<span className="badge badge-yellow">⏳ Pending</span>}
+                      {r.cheat_count>0&&<span className="badge badge-red">⚠️ {r.cheat_count}</span>}
+                      <span className={`badge ${pass?"badge-green":"badge-red"}`}>{pass?"✅ Pass":"❌ Fail"}</span>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontWeight:800,fontSize:"1.1rem",color:"#3b7ef8"}}>{r.score}/{r.total_marks}</div>
+                        <div style={{color:"#64748b",fontSize:"0.76rem"}}>{pct}%</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{marginTop:"0.65rem",background:"#e2e8f0",borderRadius:99,height:5}}>
+                    <div style={{width:`${pct}%`,height:"100%",borderRadius:99,
+                      background:pass?"linear-gradient(90deg,#059669,#10b981)":"linear-gradient(90deg,#dc2626,#ef4444)",
+                      transition:"width 1s ease"}}/>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
         )}
 
-        {answers.map((a, index) => {
-
-          const value = marks[a.question_id] || "";
-          const isInvalid = value > maxMarks;
-
-          return (
-
-            <div key={index} className="mb-6 border-b pb-4">
-
-              <h3 className="font-semibold">{a.name}</h3>
-
-              <p className="mt-1">{a.question_text}</p>
-
-              <p className="text-gray-600 mt-1">
-                {a.text_answer}
-              </p>
-
-              {/* INPUT + BUTTON ROW */}
-              <div className="flex items-center gap-3 mt-3">
-
-                <input
-                  type="number"
-                  min="0"
-                  placeholder={`Max ${maxMarks}`}
-                  value={value}
-                  disabled={evaluated[a.question_id] && !evaluated[`edit_${a.question_id}`]}
-                  onChange={(e) => {
-
-                    const val = Number(e.target.value);
-
-                    setMarks(prev => ({
-                      ...prev,
-                      [a.question_id]: val
-                    }));
-
-                  }}
-                  className={`border p-2 rounded w-32 ${
-                    isInvalid ? "border-red-500" : ""
-                  }`}
-                />
-
-                {/* SUBMIT BUTTON */}
-                {!evaluated[a.question_id] && (
-                  <button
-                    disabled={!value || isInvalid}
-                    onClick={async () => {
-
-                      await api.post("/exam/evaluate", {
-                        user_id: a.user_id,
-                        exam_id: id,
-                        question_id: a.question_id,
-                        marks: value
-                      });
-
-                      setEvaluated(prev => ({
-                        ...prev,
-                        [a.question_id]: true
-                      }));
-
-                    }}
-                    className={`px-4 py-2 rounded text-white ${
-                      !value || isInvalid
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-blue-600 hover:bg-blue-700"
-                    }`}
-                  >
-                    Submit
-                  </button>
-                )}
-
-                {/* EDIT BUTTON */}
-                {evaluated[a.question_id] && !evaluated[`edit_${a.question_id}`] && (
-                  <button
-                    onClick={() =>
-                      setEvaluated(prev => ({
-                        ...prev,
-                        [`edit_${a.question_id}`]: true
-                      }))
-                    }
-                    className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                  >
-                    Edit
-                  </button>
-                )}
-
-                {/* SAVE BUTTON AFTER EDIT */}
-                {evaluated[`edit_${a.question_id}`] && (
-                  <button
-                    disabled={!value || isInvalid}
-                    onClick={async () => {
-
-                      await api.post("/exam/evaluate", {
-                        user_id: a.user_id,
-                        exam_id: id,
-                        question_id: a.question_id,
-                        marks: value
-                      });
-
-                      setEvaluated(prev => ({
-                        ...prev,
-                        [`edit_${a.question_id}`]: false
-                      }));
-
-                    }}
-                    className={`px-4 py-2 rounded text-white ${
-                      !value || isInvalid
-                        ? "bg-gray-400"
-                        : "bg-green-600 hover:bg-green-700"
-                    }`}
-                  >
-                    Save
-                  </button>
-                )}
-
-              </div>
-
-              {/* ERROR MESSAGE */}
-              {isInvalid && (
-                <p className="text-red-500 text-sm mt-1">
-                  Max allowed marks is {maxMarks}
-                </p>
-              )}
-
-            </div>
-
-          );
-
-        })}
-
+        {answers.length>0&&(
+          <div className="glass" style={{padding:"1.6rem"}}>
+            <h2 style={{fontWeight:700,fontSize:"1rem",marginBottom:"1.1rem",color:"#0f172a"}}>✍️ Descriptive Evaluation</h2>
+            {answers.map((a,i)=>{
+              const val=marks[a.question_id]??"";
+              const isEval=evald[a.question_id];
+              const isEdit=evald[`e_${a.question_id}`];
+              return (
+                <div key={i} style={{marginBottom:"1.4rem",paddingBottom:"1.4rem",borderBottom:"1px solid rgba(59,126,248,0.08)"}}>
+                  <p style={{fontWeight:700,marginBottom:"0.25rem",color:"#0f172a"}}>{a.name}</p>
+                  <p style={{color:"#64748b",fontSize:"0.85rem",marginBottom:"0.5rem"}}>{a.question_text}</p>
+                  <div style={{background:"rgba(255,255,255,0.7)",border:"1px solid rgba(59,126,248,0.1)",
+                    borderRadius:"var(--r-sm)",padding:"0.7rem 0.9rem",fontSize:"0.88rem",
+                    marginBottom:"0.7rem",lineHeight:1.6,color:"#374151"}}>
+                    {a.text_answer||<span style={{color:"#94a3b8"}}>No answer</span>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:"0.6rem",flexWrap:"wrap"}}>
+                    <input className="input" type="number" min="0" placeholder="Marks"
+                      value={val} disabled={isEval&&!isEdit}
+                      onChange={e=>setMarks(m=>({...m,[a.question_id]:e.target.value}))}
+                      style={{width:100}}/>
+                    {!isEval&&<button className="btn btn-primary btn-sm" disabled={!val} onClick={()=>evaluate(a)}>Submit</button>}
+                    {isEval&&!isEdit&&(
+                      <button className="btn btn-sm" style={{background:"#fef9c3",color:"#a16207",border:"1px solid #fde68a"}}
+                        onClick={()=>setEvald(p=>({...p,[`e_${a.question_id}`]:true}))}>Edit</button>
+                    )}
+                    {isEdit&&<button className="btn btn-success btn-sm" disabled={!val} onClick={()=>evaluate(a,true)}>Save</button>}
+                    {isEval&&!isEdit&&<span className="badge badge-green">✅ Evaluated</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-
     </div>
   );
 }

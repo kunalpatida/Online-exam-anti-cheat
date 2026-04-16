@@ -1,4 +1,4 @@
-from database import get_db_connection
+from backend.database import get_db_connection
 from app.utils.password_utils import hash_password, verify_password
 from werkzeug.security import generate_password_hash, check_password_hash
 

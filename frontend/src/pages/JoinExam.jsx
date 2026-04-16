@@ -4,83 +4,41 @@ import { motion } from "framer-motion";
 import api from "../api/axios";
 
 export default function JoinExam() {
-
   const navigate = useNavigate();
+  const [code, setCode]     = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError]   = useState("");
 
-  const [code, setCode] = useState("");
-
-  const handleJoin = async (e) => {
-
-    e.preventDefault();
-
-    if (!code) {
-      alert("Please enter exam code");
-      return;
-    }
-
-    try {
-
-      const response = await api.post("/exam/join", {
-        exam_code: code
-        });
-
-      const exam = response.data.exam;
-
-        if (!exam || !exam.exam_id) {
-            throw new Error("Invalid exam structure");
-        }
-
-        navigate(`/exam/${exam.exam_id}`);
-
-    } catch (error) {
-
-        console.log("ERROR:", error);
-
-      alert("Invalid exam code");
-
-      console.error(error);
-
-    }
-
+  const handleJoin = async e => {
+    e.preventDefault(); if(!code.trim()) return setError("Enter exam code");
+    setError(""); setLoading(true);
+    try{ const r=await api.post("/exam/join",{exam_code:code.trim().toUpperCase()}); navigate(`/exam/${r.data.exam.exam_id}`); }
+    catch(err){ setError(err.response?.data?.error||"Invalid code"); }
+    finally{ setLoading(false); }
   };
 
   return (
-
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-100">
-
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white p-10 rounded-xl shadow-lg w-full max-w-md"
-      >
-
-        <h1 className="text-2xl font-bold mb-6 text-center">
-          Enter Exam Code
-        </h1>
-
-        <form onSubmit={handleJoin} className="space-y-4">
-
-          <input
-            type="text"
-            placeholder="Exam Code"
-            value={code}
-            onChange={(e)=>setCode(e.target.value.toUpperCase())}
-            className="w-full border p-3 rounded-lg"
-          />
-
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700"
-          >
-            Join Exam
-          </button>
-
-        </form>
-
+    <div className="page-center">
+      <motion.div className="wrap-sm" style={{width:"100%"}} initial={{opacity:0,y:28}} animate={{opacity:1,y:0}}>
+        <div style={{textAlign:"center",marginBottom:"1.75rem"}}>
+          <h1 style={{fontWeight:800,fontSize:"1.6rem",letterSpacing:"-0.03em",color:"#0f172a"}}>Join Exam</h1>
+          <p style={{color:"#64748b",marginTop:"0.3rem",fontSize:"0.88rem"}}>Enter your exam code to begin</p>
+        </div>
+        <div className="glass-strong" style={{padding:"2rem 2.25rem"}}>
+          {error&&<div className="err-box" style={{marginBottom:"1rem"}}>⚠️ {error}</div>}
+          <form onSubmit={handleJoin} style={{display:"flex",flexDirection:"column",gap:"1rem"}}>
+            <div>
+              <label className="input-label">Exam Code</label>
+              <input className="input" placeholder="e.g. AB1234" value={code}
+                onChange={e=>setCode(e.target.value.toUpperCase())} required
+                style={{fontFamily:"monospace",fontSize:"1.15rem",letterSpacing:"0.1em",textAlign:"center"}}/>
+            </div>
+            <button type="submit" className="btn btn-primary btn-full btn-lg" disabled={loading}>
+              {loading?<><span className="spin"/>Joining...</>:"Join Exam →"}
+            </button>
+          </form>
+        </div>
       </motion.div>
-
     </div>
-
   );
-
 }

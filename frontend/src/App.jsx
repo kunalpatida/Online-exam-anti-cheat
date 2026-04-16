@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login.jsx";
@@ -17,53 +17,20 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route 
-          path="/dashboard" 
-          element={
-          <ProtectedRoute>
-          <Dashboard />
-          </ProtectedRoute>
-          }
-        />
-       
-        <Route 
-          path="/exam/:id" 
-          element={
-          <ProtectedRoute>
-            <ExamPage />
-          </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/join"
-          element={
-          <ProtectedRoute>
-            <JoinExam />
-          </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/create-exam"
-          element={
-          <ProtectedRoute>
-            <CreateExam />
-          </ProtectedRoute>
-          }
-         />
-        <Route path="/exam-builder/:code" element={<ExamBuilder />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/analytics/:id" element={<AnalyticsPage />} />
-        <Route path="/results/:id" element={<ResultPage />} />
-        <Route path="/admin" element={<AdminPanel />} />
-        <Route path="/exam-submitted" element={<ExamSubmitted />} />
-
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/exam/:id" element={<ProtectedRoute><ExamPage /></ProtectedRoute>} />
+      <Route path="/join" element={<ProtectedRoute><JoinExam /></ProtectedRoute>} />
+      <Route path="/create-exam" element={<ProtectedRoute><CreateExam /></ProtectedRoute>} />
+      <Route path="/exam-builder/:code" element={<ExamBuilder />} />
+      <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/analytics/:id" element={<AnalyticsPage />} />
+      <Route path="/results/:id" element={<ResultPage />} />
+      <Route path="/admin" element={<AdminPanel />} />
+      <Route path="/exam-submitted" element={<ExamSubmitted />} />
+    </Routes>
   );
 }
