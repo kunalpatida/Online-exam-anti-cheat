@@ -8,34 +8,20 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
-def clean_json(text):
-    if not text:
-        raise ValueError("Empty AI response")
-
-    text = text.strip()
-
-    # remove markdown blocks
-    if "```" in text:
-        parts = text.split("```")
-        text = parts[1] if len(parts) > 1 else text
-
-    start = text.find("[")
-    end = text.rfind("]") + 1
-
-    if start == -1 or end == -1:
-        raise ValueError("JSON not found")
-
-    return text[start:end]
-
-
 def generate_wrong_options(question, correct_answer):
     prompt = f"""
-    Generate exactly 3 wrong options.
+    Generate exactly 3 plausible but incorrect multiple choice options.
 
     Question: {question}
     Correct Answer: {correct_answer}
 
-    Return ONLY JSON array.
+    IMPORTANT:
+    - Do NOT repeat the correct answer.
+    - Return ONLY a valid JSON array.
+    - No explanation.
+    - No markdown.
+    - Example:
+      ["Option A", "Option B", "Option C"]
     """
 
     response = client.models.generate_content(
@@ -44,28 +30,45 @@ def generate_wrong_options(question, correct_answer):
     )
 
     try:
-        text = clean_json(response.text)
-        options = json.loads(text)
+        text = response.text
+        if not text:
+            raise ValueError("Empty AI response")
+
+        text = text.strip()
+        if "```" in text:
+            text = text.split("```")[1].strip()
+
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start == -1 or end == -1:
+            raise ValueError("JSON array not found in AI response")
+
+        json_text = text[start:end]
+        options = json.loads(json_text)
 
         if not isinstance(options, list) or len(options) != 3:
-            raise ValueError("Invalid format")
+            raise ValueError("Invalid AI format")
 
         return options
 
     except Exception as e:
-        print("AI ERROR:", response.text)
-        raise Exception(f"AI parsing failed: {str(e)}")
+        raise Exception(f"AI response parsing failed: {str(e)}")
 
 
 def generate_full_exam(subject, topic, difficulty, count):
     prompt = f"""
-    Generate {count} MCQ questions.
+    Generate {count} multiple choice questions.
 
     Subject: {subject}
     Topic: {topic}
     Difficulty: {difficulty}
 
-    Return ONLY JSON:
+    STRICT REQUIREMENTS:
+    - Return ONLY JSON
+    - No explanation
+    - No markdown
+    - Format EXACTLY like:
+
     [
         {{
             "question_text": "...",
@@ -81,33 +84,47 @@ def generate_full_exam(subject, topic, difficulty, count):
     )
 
     try:
-        text = clean_json(response.text)
-        questions = json.loads(text)
+        text = response.text
+        if not text:
+            raise ValueError("Empty AI response")
+
+        text = text.strip()
+        if "```" in text:
+            text = text.split("```")[1].strip()
+
+        start = text.find("[")
+        end = text.rfind("]") + 1
+        if start == -1 or end == -1:
+            raise ValueError("JSON array not found")
+
+        json_text = text[start:end]
+        questions = json.loads(json_text)
+
+        if not isinstance(questions, list):
+            raise ValueError("Invalid AI format")
 
         for q in questions:
             if "question_text" not in q or "options" not in q or "correct" not in q:
-                raise ValueError("Bad format")
+                raise ValueError("Invalid question format from AI")
 
         return questions
 
     except Exception as e:
-        print("AI RAW:", response.text)
-        raise Exception(f"AI parsing failed: {str(e)}")
+        print("AI RAW OUTPUT:", text)
+        raise Exception(f"AI full exam parsing failed: {str(e)}")
 
 
 def generate_full_question(topic):
     prompt = f"""
-    Generate one MCQ.
+    Generate ONE multiple choice question on topic: {topic}
 
-    Topic: {topic}
-
-    Format:
-    Question: ...
-    A: ...
-    B: ...
-    C: ...
-    D: ...
-    Correct: A
+    Strict format:
+    Question: <question>
+    A: <option A>
+    B: <option B>
+    C: <option C>
+    D: <option D>
+    Correct: <A/B/C/D>
     """
 
     response = client.models.generate_content(
@@ -116,7 +133,7 @@ def generate_full_question(topic):
     )
 
     text = response.text.strip()
-    print("AI RAW:", text)
+    print("\nAI RAW RESPONSE:\n", text)
 
     lines = text.split("\n")
 
@@ -133,7 +150,7 @@ def generate_full_question(topic):
             correct = line.split(":")[-1].strip()
 
     if len(options) < 4:
-        raise Exception("AI parsing failed")
+        raise Exception("AI response parsing failed")
 
     return {
         "question": question,
