@@ -163,26 +163,30 @@ def join_exam():
     if not exam:
         return jsonify({"error": "Invalid exam code"}), 404
 
-    now = datetime.now()
+    # ✅ FIX: use UTC
+    now = datetime.utcnow()
+
     start = _normalize_exam_datetime(exam.get("start_time"))
     end = _normalize_exam_datetime(exam.get("end_time"))
 
-    if start is not None:
-        if now < start:
-            diff_minutes = max(1, int((start - now).total_seconds() / 60))
-            return jsonify({
-                "error": f"Exam has not started yet. Starts in {diff_minutes} minute(s)"
-            }), 403
+    if start is not None and now < start:
+        return jsonify({"error": "Exam has not started yet"}), 403
 
-    if end is not None:
-        if now > end:
-            return jsonify({"error": "Exam window has closed"}), 403
+    if end is not None and now > end:
+        return jsonify({"error": "Exam window has closed"}), 403
 
     attempt = get_exam_attempt(user_id, exam["exam_id"])
     if attempt and attempt["status"] == "SUBMITTED":
         return jsonify({"error": "You have already completed this exam"}), 403
 
-    return jsonify({"message": "Exam ready", "exam": exam}), 200
+    # ✅ FIX: START EXAM HERE (NOT in questions)
+    session_token = start_exam_if_not_started(user_id, exam["exam_id"])
+
+    return jsonify({
+        "message": "Exam ready",
+        "exam": exam,
+        "session_token": session_token
+    }), 200
 
 
 # ------------------------------------------------------------------
@@ -196,16 +200,12 @@ def get_exam_questions(exam_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute(
-        "SELECT status FROM results WHERE user_id=%s AND exam_id=%s",
-        (user_id, exam_id),
-    )
-    result = cursor.fetchone()
-
-    if result and result["status"] in ("SUBMITTED", "TERMINATED"):
+    # ✅ FIX: DO NOT START EXAM HERE
+    attempt = get_exam_attempt(user_id, exam_id)
+    if not attempt:
         cursor.close()
         conn.close()
-        return jsonify({"error": "Exam already completed"}), 403
+        return jsonify({"error": "Exam not started. Please join first"}), 403
 
     cursor.execute("""
         SELECT duration_minutes, start_time, end_time
@@ -213,26 +213,19 @@ def get_exam_questions(exam_id):
     """, (exam_id,))
     exam = cursor.fetchone()
 
-    if not exam:
-        cursor.close()
-        conn.close()
-        return jsonify({"error": "Exam not found"}), 404
+    now = datetime.utcnow()
 
-    now = datetime.now()
     exam_start = _normalize_exam_datetime(exam.get("start_time"))
     exam_end = _normalize_exam_datetime(exam.get("end_time"))
 
-    if exam_start is not None and now < exam_start:
-        cursor.close()
-        conn.close()
+    if exam_start and now < exam_start:
         return jsonify({"error": "Exam has not started yet"}), 403
 
-    if exam_end is not None and now > exam_end:
-        cursor.close()
-        conn.close()
+    if exam_end and now > exam_end:
         return jsonify({"error": "Exam window has closed"}), 403
 
-    session_token = start_exam_if_not_started(user_id, exam_id)
+    
+    # session_token = start_exam_if_not_started(user_id, exam_id)
 
     cursor.execute(
         "SELECT start_time FROM results WHERE user_id=%s AND exam_id=%s",
@@ -242,55 +235,22 @@ def get_exam_questions(exam_id):
 
     start_time = row["start_time"]
     end_time   = start_time + timedelta(minutes=exam["duration_minutes"])
-    remaining  = (end_time - datetime.now()).total_seconds()
+    remaining  = (end_time - datetime.utcnow()).total_seconds()
 
     if remaining <= 0:
         submit_exam(user_id, exam_id)
-        cursor.close()
-        conn.close()
         return jsonify({"error": "Time over. Exam auto-submitted"}), 403
 
     questions = get_questions_by_exam(exam_id)
-    shuffled  = []
-
-    for q in questions:
-        if (q.get("question_type") or "").lower() == "mcq":
-            options = [
-                ("A", q.get("option_a")),
-                ("B", q.get("option_b")),
-                ("C", q.get("option_c")),
-                ("D", q.get("option_d")),
-            ]
-            options = [(lbl, txt) for lbl, txt in options if txt]
-
-            correct_label = q.get("correct_option")
-            correct_text  = next(
-                (txt for lbl, txt in options if lbl == correct_label), None
-            )
-
-            random.shuffle(options)
-            new_opts = {}
-
-            for i, (_, txt) in enumerate(options):
-                new_label = ["A", "B", "C", "D"][i]
-                new_opts[f"option_{new_label.lower()}"] = txt
-
-            q.update(new_opts)
-            q["correct_option"] = correct_text
-
-        shuffled.append(q)
-
-    random.shuffle(shuffled)
     answers = get_saved_answers(user_id, exam_id)
 
     cursor.close()
     conn.close()
 
     return jsonify({
-        "questions":        shuffled,
-        "answers":          answers,
+        "questions": questions,
+        "answers": answers,
         "remaining_seconds": int(remaining),
-        "session_token":    session_token,
     }), 200
 
 
