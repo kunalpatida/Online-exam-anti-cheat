@@ -1,124 +1,208 @@
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-
-const features = [
-  { icon:"AI", title:"AI Question Generation", desc:"Generate full exams in seconds with Gemini AI — any topic, any difficulty." },
-  { icon:"Shield", title:"Anti-Cheat System",      desc:"Tab-switch detection, copy-paste block, auto-submit on violations." },
-  { icon:"Chart", title:"Live Analytics",          desc:"Real-time scores, pass/fail charts, and cheating activity logs." },
-  { icon:"Clock", title:"Smart Timer",             desc:"Server-synced countdown — refresh-proof, session always persists." },
-  { icon:"Edit", title:"MCQ + Descriptive",       desc:"Auto-grade MCQs. Manual evaluation panel for written answers." },
-  { icon:"Phone", title:"Mobile Ready",            desc:"Fully responsive — works perfectly on phones, tablets, desktops." },
-];
 
 export default function Home() {
   return (
-    <div style={{minHeight:"100vh",overflowX:"hidden"}}>
+    <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "Inter, sans-serif" }}>
 
-      {/* Navbar */}
-      <motion.nav initial={{y:-20,opacity:0}} animate={{y:0,opacity:1}}
-        style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-          padding:"0.9rem 1.5rem",background:"rgba(255,255,255,0.75)",
-          backdropFilter:"blur(18px)",borderBottom:"1px solid rgba(59,126,248,0.1)",
-          position:"sticky",top:0,zIndex:100}}>
-        <div style={{display:"flex",alignItems:"center",gap:"0.5rem"}}>
-          <div style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#3b7ef8,#60a5fa)",
-            display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,
-            boxShadow:"0 4px 12px rgba(59,126,248,0.3)"}}>E</div>
-          <span style={{fontWeight:800,fontSize:"1.05rem",color:"#0f172a",letterSpacing:"-0.03em"}}>
-            SmartExam <span style={{color:"#3b7ef8"}}>AI</span>
-          </span>
-        </div>
-        <div style={{display:"flex",gap:"0.5rem"}}>
-          <Link to="/login"    className="btn btn-secondary btn-sm">Login</Link>
-          <Link to="/register" className="btn btn-primary btn-sm">Get Started</Link>
-        </div>
-      </motion.nav>
+      {/* NAVBAR */}
+      <nav style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "1rem 2rem",
+        background: "#ffffff",
+        borderBottom: "1px solid #e2e8f0",
+        position: "sticky",
+        top: 0,
+        zIndex: 100
+      }}>
+        <h2 style={{ fontWeight: 700, fontSize: "1.2rem", color: "#0f172a" }}>
+          SmartExam AI
+        </h2>
 
-      {/* Hero */}
-      <section style={{textAlign:"center",padding:"5rem 1.25rem 3.5rem",maxWidth:760,margin:"0 auto"}}>
-        <motion.div initial={{opacity:0,y:32}} animate={{opacity:1,y:0}} transition={{duration:0.5}}>
-          <span className="badge badge-blue" style={{marginBottom:"1.25rem",display:"inline-flex",fontSize:"0.78rem"}}>
-            Powered by Gemini AI
-          </span>
-          <h1 style={{fontWeight:800,letterSpacing:"-0.04em",lineHeight:1.1,
-            fontSize:"clamp(2.1rem,6vw,3.8rem)",color:"#0f172a",marginBottom:"1.25rem"}}>
-            The Smartest Way to<br/>
-            <span style={{background:"linear-gradient(135deg,#3b7ef8,#60a5fa)",
-              WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>
-              Run Online Exams
-            </span>
+        <div style={{ display: "flex", gap: "1rem" }}>
+          <Link to="/login" style={linkStyle}>Login</Link>
+          <Link to="/register" style={primaryBtn}>Get Started</Link>
+        </div>
+      </nav>
+
+
+      {/* HERO */}
+      <section style={{
+        display: "grid",
+        gridTemplateColumns: "1.2fr 1fr",
+        alignItems: "center",
+        padding: "5rem 2rem",
+        maxWidth: "1100px",
+        margin: "0 auto",
+        gap: "2rem"
+      }}>
+
+        {/* LEFT */}
+        <div>
+          <h1 style={{
+            fontSize: "3rem",
+            fontWeight: 800,
+            lineHeight: 1.2,
+            marginBottom: "1rem",
+            color: "#0f172a"
+          }}>
+            Run Smarter Exams <br /> Without the Headache
           </h1>
-          <p style={{color:"#475569",fontSize:"clamp(0.95rem,2.5vw,1.05rem)",lineHeight:1.75,
-            maxWidth:500,margin:"0 auto 2.25rem"}}>
-            Create AI-powered exams in minutes. Auto-grade, detect cheating, and get deep analytics — all in one clean platform.
-          </p>
-          <div style={{display:"flex",gap:"0.65rem",justifyContent:"center",flexWrap:"wrap"}}>
-            <Link to="/register" className="btn btn-primary btn-lg">Start for Free</Link>
-            <Link to="/login"    className="btn btn-secondary btn-lg">Sign In</Link>
-          </div>
-        </motion.div>
 
+          <p style={{
+            color: "#475569",
+            fontSize: "1.05rem",
+            marginBottom: "2rem",
+            maxWidth: "480px"
+          }}>
+            Create exams in minutes, auto-grade responses, and monitor cheating —
+            all from one clean dashboard.
+          </p>
+
+          <div style={{ display: "flex", gap: "1rem" }}>
+            <Link to="/register" style={primaryBtn}>
+              Start Free
+            </Link>
+            <Link to="/login" style={secondaryBtn}>
+              Live Demo
+            </Link>
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div style={{
+          height: "280px",
+          borderRadius: "16px",
+          background: "#e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#64748b",
+          fontSize: "0.9rem"
+        }}>
+          Dashboard Preview
+        </div>
       </section>
 
-      {/* Stats */}
-      <section style={{padding:"1rem 1.25rem 3rem",maxWidth:820,margin:"0 auto"}}>
-        <motion.div initial={{opacity:0,y:16}} whileInView={{opacity:1,y:0}} viewport={{once:true}}
-          style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:"0.9rem"}}>
-          {[{v:"1000+",l:"AI Questions"},{v:"500+",l:"Active Users"},{v:"99%",l:"Accuracy"},{v:"< 1s",l:"Grading Speed"}].map((s,i)=>(
-            <div key={i} className="glass" style={{padding:"1.25rem",textAlign:"center"}}>
-              <div style={{fontWeight:800,fontSize:"1.75rem",color:"#3b7ef8",letterSpacing:"-0.04em"}}>{s.v}</div>
-              <div style={{color:"#64748b",fontSize:"0.78rem",marginTop:"0.18rem",fontWeight:500}}>{s.l}</div>
+
+      {/* STATS */}
+      <section style={{
+        display: "flex",
+        justifyContent: "space-around",
+        padding: "2rem",
+        background: "#ffffff",
+        borderTop: "1px solid #e2e8f0",
+        borderBottom: "1px solid #e2e8f0",
+        flexWrap: "wrap",
+        gap: "1rem"
+      }}>
+        {[
+          ["1000+", "Questions Generated"],
+          ["500+", "Active Users"],
+          ["99%", "Accuracy"],
+          ["<1s", "Grading Time"]
+        ].map((s, i) => (
+          <div key={i} style={{ textAlign: "center" }}>
+            <h3 style={{ fontWeight: 700, fontSize: "1.5rem", color: "#0f172a" }}>{s[0]}</h3>
+            <p style={{ fontSize: "0.85rem", color: "#64748b" }}>{s[1]}</p>
+          </div>
+        ))}
+      </section>
+
+
+      {/* FEATURES */}
+      <section style={{
+        maxWidth: "1100px",
+        margin: "0 auto",
+        padding: "4rem 2rem"
+      }}>
+        <h2 style={{
+          fontSize: "2rem",
+          fontWeight: 700,
+          marginBottom: "2rem",
+          color: "#0f172a"
+        }}>
+          Built for Real Exam Workflows
+        </h2>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: "1.5rem"
+        }}>
+          {[
+            ["AI Generation", "Generate full exams instantly with AI"],
+            ["Anti-Cheat", "Detect tab switching & suspicious behavior"],
+            ["Analytics", "Track student performance in real-time"],
+            ["Smart Timer", "Auto-synced exam timing"],
+            ["Evaluation", "MCQ + descriptive grading system"],
+            ["Responsive", "Works smoothly on all devices"]
+          ].map((f, i) => (
+            <div key={i} style={{
+              padding: "1.5rem",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              background: "#ffffff"
+            }}>
+              <h3 style={{ fontWeight: 600, marginBottom: "0.5rem", color: "#0f172a" }}>
+                {f[0]}
+              </h3>
+              <p style={{ fontSize: "0.9rem", color: "#64748b" }}>
+                {f[1]}
+              </p>
             </div>
           ))}
-        </motion.div>
-      </section>
-
-      {/* Features */}
-      <section style={{padding:"2.5rem 1.25rem 4rem",maxWidth:940,margin:"0 auto"}}>
-        <motion.div initial={{opacity:0}} whileInView={{opacity:1}} viewport={{once:true}}
-          style={{textAlign:"center",marginBottom:"2.5rem"}}>
-          <h2 style={{fontWeight:800,fontSize:"clamp(1.5rem,4vw,2rem)",letterSpacing:"-0.03em",color:"#0f172a"}}>
-            Everything you need
-          </h2>
-          <p style={{color:"#64748b",marginTop:"0.5rem",fontSize:"0.9rem"}}>One platform. Every feature. Zero compromise.</p>
-        </motion.div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:"1rem"}}>
-          {features.map((f,i)=>(
-            <motion.div key={i} className="glass"
-              initial={{opacity:0,y:16}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:i*0.06}}
-              whileHover={{y:-4,boxShadow:"0 12px 36px rgba(59,126,248,0.16)"}}
-              style={{padding:"1.5rem",transition:"all 0.22s"}}>
-              <div style={{width:40,height:40,borderRadius:10,
-                background:"linear-gradient(135deg,rgba(59,126,248,0.1),rgba(96,165,250,0.07))",
-                border:"1px solid rgba(59,126,248,0.14)",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.75rem",fontWeight:700,marginBottom:"0.9rem"}}>
-                {f.icon}
-              </div>
-              <h3 style={{fontWeight:700,fontSize:"0.92rem",marginBottom:"0.4rem",color:"#0f172a"}}>{f.title}</h3>
-              <p style={{color:"#64748b",fontSize:"0.83rem",lineHeight:1.65}}>{f.desc}</p>
-            </motion.div>
-          ))}
         </div>
       </section>
 
+
       {/* CTA */}
-      <section style={{padding:"1.5rem 1.25rem 5rem",maxWidth:580,margin:"0 auto",textAlign:"center"}}>
-        <motion.div className="glass-strong" style={{padding:"2.75rem 2rem"}}
-          initial={{opacity:0,scale:0.96}} whileInView={{opacity:1,scale:1}} viewport={{once:true}}>
-          <div style={{fontSize:"2.25rem",marginBottom:"0.9rem",opacity:0.7}}>Start Now</div>
-          <h2 style={{fontWeight:800,fontSize:"clamp(1.35rem,4vw,1.75rem)",letterSpacing:"-0.03em",marginBottom:"0.65rem",color:"#0f172a"}}>
-            Ready to transform your exams?
-          </h2>
-          <p style={{color:"#64748b",marginBottom:"1.6rem",fontSize:"0.9rem"}}>
-            Join hundreds of educators using SmartExam AI today.
-          </p>
-          <Link to="/register" className="btn btn-primary btn-lg btn-full"
-            style={{maxWidth:260,margin:"0 auto",display:"flex"}}>
-            Create Free Account
-          </Link>
-        </motion.div>
+      <section style={{
+        background: "#0f172a",
+        color: "white",
+        textAlign: "center",
+        padding: "4rem 2rem"
+      }}>
+        <h2 style={{ fontSize: "2rem", fontWeight: 700 }}>
+          Ready to simplify your exams?
+        </h2>
+
+        <p style={{ margin: "1rem 0", color: "#cbd5f5" }}>
+          Start using SmartExam AI today.
+        </p>
+
+        <Link to="/register" style={primaryBtn}>
+          Create Free Account
+        </Link>
       </section>
 
     </div>
   );
 }
+
+
+/* STYLES */
+const linkStyle = {
+  textDecoration: "none",
+  color: "#0f172a",
+  fontWeight: 500
+};
+
+const primaryBtn = {
+  textDecoration: "none",
+  background: "#3b82f6",
+  color: "white",
+  padding: "0.6rem 1.2rem",
+  borderRadius: "8px",
+  fontWeight: 600
+};
+
+const secondaryBtn = {
+  textDecoration: "none",
+  border: "1px solid #cbd5e1",
+  padding: "0.6rem 1.2rem",
+  borderRadius: "8px",
+  color: "#0f172a",
+  fontWeight: 500
+};
