@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from google import genai
 from dotenv import load_dotenv
 
@@ -7,153 +8,178 @@ load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+MODEL = "gemini-2.5-flash"
+
+
+def clean_json_text(text):
+    text = text.strip()
+    if "```" in text:
+        parts = text.split("```")
+        for part in parts:
+            part = part.strip()
+            if part.startswith("json"):
+                part = part[4:].strip()
+            if part.startswith("[") or part.startswith("{"):
+                text = part
+                break
+    start_bracket = text.find("[")
+    end_bracket = text.rfind("]")
+    if start_bracket != -1 and end_bracket != -1:
+        return text[start_bracket:end_bracket + 1]
+    return text
+
+
+def call_gemini(prompt, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=prompt,
+            )
+            text = response.text
+            if text and text.strip():
+                return text.strip()
+            print(f"Empty response on attempt {attempt + 1}, retrying...")
+        except Exception as e:
+            print(f"Gemini API error on attempt {attempt + 1}: {str(e)}")
+        if attempt < retries - 1:
+            time.sleep(delay)
+    raise Exception("Gemini API failed after multiple retries")
+
 
 def generate_wrong_options(question, correct_answer):
-    prompt = f"""
-    Generate exactly 3 plausible but incorrect multiple choice options.
+    prompt = f"""Generate exactly 3 plausible but incorrect multiple choice options.
 
-    Question: {question}
-    Correct Answer: {correct_answer}
+Question: {question}
+Correct Answer: {correct_answer}
 
-    IMPORTANT:
-    - Do NOT repeat the correct answer.
-    - Return ONLY a valid JSON array.
-    - No explanation.
-    - No markdown.
-    - Example:
-      ["Option A", "Option B", "Option C"]
-    """
+Rules:
+- Do NOT include the correct answer
+- Return ONLY a valid JSON array with exactly 3 strings
+- No markdown, no explanation
+- Example: ["Option 1", "Option 2", "Option 3"]"""
 
-    response = client.models.generate_content(
-        model="models/gemini-2.5-flash",
-        contents=prompt,
-    )
+    for attempt in range(3):
+        try:
+            text = call_gemini(prompt)
+            text = clean_json_text(text)
+            options = json.loads(text)
 
-    try:
-        text = response.text
-        if not text:
-            raise ValueError("Empty AI response")
+            if not isinstance(options, list):
+                raise ValueError("Not a list")
 
-        text = text.strip()
-        if "```" in text:
-            text = text.split("```")[1].strip()
+            options = [str(o).strip() for o in options if str(o).strip()]
+            options = [o for o in options if o.lower() != correct_answer.lower()]
 
-        start = text.find("[")
-        end = text.rfind("]") + 1
-        if start == -1 or end == -1:
-            raise ValueError("JSON array not found in AI response")
+            if len(options) >= 3:
+                return options[:3]
 
-        json_text = text[start:end]
-        options = json.loads(json_text)
+            raise ValueError(f"Not enough options: {len(options)}")
 
-        if not isinstance(options, list) or len(options) != 3:
-            raise ValueError("Invalid AI format")
+        except Exception as e:
+            print(f"generate_wrong_options attempt {attempt + 1} failed: {str(e)}")
+            if attempt < 2:
+                time.sleep(1)
 
-        return options
-
-    except Exception as e:
-        raise Exception(f"AI response parsing failed: {str(e)}")
+    raise Exception("Failed to generate wrong options after 3 attempts")
 
 
 def generate_full_exam(subject, topic, difficulty, count):
-    prompt = f"""
-    Generate {count} multiple choice questions.
+    prompt = f"""Generate exactly {count} multiple choice questions.
 
-    Subject: {subject}
-    Topic: {topic}
-    Difficulty: {difficulty}
+Subject: {subject}
+Topic: {topic}
+Difficulty: {difficulty}
 
-    STRICT REQUIREMENTS:
-    - Return ONLY JSON
-    - No explanation
-    - No markdown
-    - Format EXACTLY like:
+Return ONLY a JSON array. No markdown. No explanation.
+Format:
+[
+  {{
+    "question_text": "Question here?",
+    "options": ["A: option1", "B: option2", "C: option3", "D: option4"],
+    "correct": "A"
+  }}
+]"""
 
-    [
-        {{
-            "question_text": "...",
-            "options": ["A: ...", "B: ...", "C: ...", "D: ..."],
-            "correct": "A"
-        }}
-    ]
-    """
+    for attempt in range(3):
+        try:
+            text = call_gemini(prompt)
+            text = clean_json_text(text)
+            questions = json.loads(text)
 
-    response = client.models.generate_content(
-        model="models/gemini-2.5-flash",
-        contents=prompt,
-    )
+            if not isinstance(questions, list) or len(questions) == 0:
+                raise ValueError("Empty or invalid question list")
 
-    try:
-        text = response.text
-        if not text:
-            raise ValueError("Empty AI response")
+            valid = []
+            for q in questions:
+                if (
+                    isinstance(q, dict)
+                    and q.get("question_text", "").strip()
+                    and isinstance(q.get("options"), list)
+                    and len(q.get("options", [])) >= 4
+                    and q.get("correct", "").strip()
+                ):
+                    valid.append(q)
 
-        text = text.strip()
-        if "```" in text:
-            text = text.split("```")[1].strip()
+            if len(valid) == 0:
+                raise ValueError("No valid questions in response")
 
-        start = text.find("[")
-        end = text.rfind("]") + 1
-        if start == -1 or end == -1:
-            raise ValueError("JSON array not found")
+            return valid
 
-        json_text = text[start:end]
-        questions = json.loads(json_text)
+        except Exception as e:
+            print(f"generate_full_exam attempt {attempt + 1} failed: {str(e)}")
+            if attempt < 2:
+                time.sleep(2)
 
-        if not isinstance(questions, list):
-            raise ValueError("Invalid AI format")
-
-        for q in questions:
-            if "question_text" not in q or "options" not in q or "correct" not in q:
-                raise ValueError("Invalid question format from AI")
-
-        return questions
-
-    except Exception as e:
-        print("AI RAW OUTPUT:", text)
-        raise Exception(f"AI full exam parsing failed: {str(e)}")
+    raise Exception("Failed to generate full exam after 3 attempts")
 
 
 def generate_full_question(topic):
-    prompt = f"""
-    Generate ONE multiple choice question on topic: {topic}
+    prompt = f"""Generate ONE multiple choice question on topic: {topic}
 
-    Strict format:
-    Question: <question>
-    A: <option A>
-    B: <option B>
-    C: <option C>
-    D: <option D>
-    Correct: <A/B/C/D>
-    """
+Use EXACTLY this format:
+Question: <question text>
+A: <option A>
+B: <option B>
+C: <option C>
+D: <option D>
+Correct: <A or B or C or D>"""
 
-    response = client.models.generate_content(
-        model="models/gemini-2.5-flash",
-        contents=prompt,
-    )
+    for attempt in range(3):
+        try:
+            text = call_gemini(prompt)
+            print(f"\nAI RAW RESPONSE (attempt {attempt + 1}):\n", text)
 
-    text = response.text.strip()
-    print("\nAI RAW RESPONSE:\n", text)
+            lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
 
-    lines = text.split("\n")
+            question = ""
+            options = []
+            correct = "A"
 
-    question = ""
-    options = []
-    correct = "A"
+            for line in lines:
+                if line.startswith("Question:"):
+                    question = line.replace("Question:", "").strip()
+                elif line.startswith(("A:", "B:", "C:", "D:")):
+                    options.append(line.strip())
+                elif line.lower().startswith("correct"):
+                    correct = line.split(":")[-1].strip().upper()
+                    if correct not in ["A", "B", "C", "D"]:
+                        correct = "A"
 
-    for line in lines:
-        if line.startswith("Question:"):
-            question = line.replace("Question:", "").strip()
-        elif line.startswith(("A:", "B:", "C:", "D:")):
-            options.append(line)
-        elif "Correct" in line:
-            correct = line.split(":")[-1].strip()
+            if not question:
+                raise ValueError("No question found in response")
+            if len(options) < 4:
+                raise ValueError(f"Only {len(options)} options found")
 
-    if len(options) < 4:
-        raise Exception("AI response parsing failed")
+            return {
+                "question": question,
+                "options": options,
+                "correct": correct
+            }
 
-    return {
-        "question": question,
-        "options": options,
-        "correct": correct
-    }
+        except Exception as e:
+            print(f"generate_full_question attempt {attempt + 1} failed: {str(e)}")
+            if attempt < 3:
+                time.sleep(1)
+
+    raise Exception("Failed to generate question after 4 attempts")
