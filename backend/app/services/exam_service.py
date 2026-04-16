@@ -293,42 +293,39 @@ def get_exam_results(exam_id):
     return results
 
 
+
 def start_exam_if_not_started(user_id, exam_id):
-    conn   = get_db_connection()
+    conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute("""
-        SELECT status, session_token, start_time FROM results WHERE user_id=%s AND exam_id=%s
+        SELECT status, session_token FROM results
+        WHERE user_id=%s AND exam_id=%s
     """, (user_id, exam_id))
+
     existing = cursor.fetchone()
 
     if not existing:
+
         token = str(uuid.uuid4())
+
         cursor.execute("""
-            INSERT INTO results
-                (user_id, exam_id, score, total_marks, start_time, status, session_token)
+            INSERT INTO results 
+            (user_id, exam_id, score, total_marks, start_time, status, session_token)
             SELECT %s, %s, 0, total_marks, NOW(), 'IN_PROGRESS', %s
             FROM exams WHERE exam_id=%s
         """, (user_id, exam_id, token, exam_id))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return token
 
-    if not existing.get("start_time"):
-        token = existing.get("session_token") or str(uuid.uuid4())
-        cursor.execute("""
-            UPDATE results
-            SET start_time=NOW(), status='IN_PROGRESS', session_token=%s
-            WHERE user_id=%s AND exam_id=%s
-        """, (token, user_id, exam_id))
         conn.commit()
+
         cursor.close()
         conn.close()
+
         return token
 
     cursor.close()
     conn.close()
+
     return existing["session_token"]
 
 
