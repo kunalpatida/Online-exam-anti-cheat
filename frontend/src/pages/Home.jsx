@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import dashboardImg from "../assets/dashboard.png";
 
 export default function Home() {
   return (
@@ -70,19 +71,15 @@ export default function Home() {
           </div>
         </div>
 
-        {/* RIGHT */}
-        <div style={{
-          height: "280px",
-          borderRadius: "16px",
-          background: "#e2e8f0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#64748b",
-          fontSize: "0.9rem"
-        }}>
-          Dashboard Preview
-        </div>
+      <img
+          src={dashboardImg}
+          alt="Dashboard preview"
+          style={{
+            width: "100%",
+            borderRadius: "16px",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.1)"
+          }}
+      />
       </section>
 
 
